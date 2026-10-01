@@ -39,6 +39,7 @@
     <symbol id="i-link" viewBox="0 0 18 18"><path d="M7 11a3 3 0 0 0 4 0l3-3a3 3 0 0 0-4-4l-1 1M11 7a3 3 0 0 0-4 0l-3 3a3 3 0 0 0 4 4l1-1" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
     <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 6v4M8 11.5v1" stroke="currentColor" stroke-width="1.6"/></symbol>
     <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v4.2M8 4.4v1.2" stroke="currentColor" stroke-width="1.6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 18 18"><path d="M9 3v12M3 9h12" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
     <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
   </defs>
 </svg>
@@ -126,6 +127,17 @@
 </div>
 
 <div class="below">
+  <section class="card beams" id="beams" aria-labelledby="beams-title">
+    <h2 class="beams-t" id="beams-title" data-i18n="list_title">Tus vigas</h2>
+    <p class="hint beams-empty" id="list-empty" data-i18n="list_empty">Guardá esta viga y seguí con la próxima: al final descargás todas en un Excel que abre el BeamSummary de mento</p>
+    <ul class="beams-list" id="list" hidden></ul>
+    <div class="actions">
+      <button class="btn btn--sec" type="button" id="list-save" disabled><svg width="14" height="14" aria-hidden="true"><use href="#i-plus"/></svg><span id="list-save-text"></span></button>
+      <button class="btn" type="button" id="list-xlsx" disabled><svg width="14" height="14" aria-hidden="true"><use href="#i-download"/></svg><span data-i18n="list_dl">Descargá el Excel</span></button>
+      <button class="link-btn" type="button" id="list-clear" hidden data-i18n="list_clear">Vaciá la lista</button>
+    </div>
+    <p class="hint beams-hint" data-i18n-html="list_hint">El Excel sigue el formato de <a href="https://mento-docs.readthedocs.io/en/latest/user_guide/beam_summary.html">BeamSummary</a>: una fila por combinación, con las barras de la cara que tracciona su momento.</p>
+  </section>
   <details class="disc" id="disc-flexure" open><summary><span data-i18n="tflex">Resultados de flexión</span></summary>
     <div class="df-wrap" id="table-flexure" tabindex="0" role="region" data-i18n-aria="tflex" aria-label="Resultados de flexión"></div></details>
   <details class="disc" id="disc-shear" open><summary><span data-i18n="tshear">Resultados de corte</span></summary>

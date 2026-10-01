@@ -336,6 +336,7 @@ export async function start(spec) {
   function schedule({ now = false } = {}) {
     version += 1;
     renderPython();
+    if (spec.collection) renderList();
     if (!validate()) return;
     writeHash();
     renderPreview();
@@ -493,7 +494,11 @@ export async function start(spec) {
     setButtons(true);
   }
 
-  const setButtons = (enabled) => { $("report").disabled = !enabled; $("share").disabled = !enabled; };
+  const setButtons = (enabled) => {
+    $("report").disabled = !enabled;
+    $("share").disabled = !enabled;
+    if (spec.collection) $("list-save").disabled = !enabled;
+  };
 
   // ------------------------------------------------------------ rendering
   // What mento says about the section, in the three levels the glue reads off its categories
@@ -893,6 +898,120 @@ export async function start(spec) {
     schedule({ now: true });
   }
 
+  // ------------------------------------------------------------ the list of saved beams
+  // A calculator that sets `collection` keeps the designs the visitor saves, to hand them over in one
+  // Excel (py/beam.py summary). BeamSummary takes one concrete and one steel, so every beam of the
+  // list shares units, code, fc and fy.
+  const LIST_KEY = `mento-${spec.module}-list`;
+  let list = [];
+  try {
+    const stored = JSON.parse(localStorage.getItem(LIST_KEY));
+    if (Array.isArray(stored)) list = stored.filter((entry) => entry?.label && entry.state && entry.payload && entry.layouts);
+  } catch { /* storage blocked, or a list this page cannot read */ }
+
+  function storeList() {
+    try { localStorage.setItem(LIST_KEY, JSON.stringify(list)); } catch { /* storage blocked */ }
+  }
+
+  // V-101 → V-102, keeping the zeros (B-009 → B-010); a name without a number takes "-2".
+  function nextLabel(label) {
+    const match = /(\d+)(?!.*\d)/.exec(label);
+    if (!match) return `${label}-2`;
+    const number = String(Number(match[1]) + 1).padStart(match[1].length, "0");
+    return label.slice(0, match.index) + number + label.slice(match.index + match[1].length);
+  }
+
+  const shares = (a, b) => ["units", "code", "fc", "fy"].every((key) => (a[key] ?? "si") === (b[key] ?? "si"));
+  const listLabel = () => String(state.label ?? "").trim() || "B1";
+
+  function renderList() {
+    const label = listLabel();
+    $("list-save-text").textContent = (list.some((entry) => entry.label === label) ? t.list_update : t.list_save).replace("{label}", label);
+    $("list-empty").hidden = list.length > 0;
+    $("list").hidden = list.length === 0;
+    $("list-xlsx").disabled = list.length === 0;
+    $("list-clear").hidden = list.length === 0;
+    $("list").innerHTML = list.map((entry) => {
+      const U = UNITS[entry.payload.units || "si"];
+      const combos = entry.payload.forces.filter((force) => spec.forces.some((key) => force[key])).length;
+      const bars = [["bot", entry.rebar?.bot], ["top", entry.rebar?.top], ["st", entry.rebar?.st]].filter(([, value]) => value)
+        .map(([key, value]) => `<span><span class="k">${t[key]}</span> ${escapeHtml(value)}</span>`).join("");
+      const name = escapeHtml(entry.label);
+      return `<li class="bm"${entry.label === state.label ? ' aria-current="true"' : ""}>`
+        + `<button type="button" class="bm-open" data-label="${name}" aria-label="${escapeHtml(t.list_open.replace("{label}", entry.label))}">`
+        + `<span class="bm-top"><b class="bm-name">${name}</b><span class="bm-size">${fmt(entry.payload.width)}×${fmt(entry.payload.height)} ${U.len}</span>`
+        + `<span class="bm-combos">${t.list_combos.replace("{n}", combos)}</span>`
+        + `<span class="dcr ${entry.status}">${two(entry.dcr)}</span></span>`
+        + `<span class="bm-bars">${bars}</span></button>`
+        + `<button type="button" class="bm-rm" data-label="${name}" aria-label="${escapeHtml(t.list_remove.replace("{label}", entry.label))}">×</button></li>`;
+    }).join("");
+  }
+
+  function saveToList() {
+    if (!lastResult || $("list-save").disabled) return;
+    const sent = payload();
+    const label = listLabel();
+    const other = list.find((entry) => entry.label !== label);
+    if (other && !shares(other.payload, sent)) return toast(t.list_mismatch.replace("{label}", label));
+    sent.label = label;
+    const entry = {
+      label, state: structuredClone(state), payload: sent, layouts: lastResult.layouts, rebar: lastResult.rebar,
+      dcr: lastResult.governing, status: lastResult.status,
+    };
+    const index = list.findIndex((item) => item.label === label);
+    const updated = index >= 0;
+    if (updated) list[index] = entry; else list.push(entry);
+    storeList();
+    // the next beam starts on the next name, so editing it does not overwrite this one
+    const next = nextLabel(label);
+    toast((updated ? t.list_updated : t.list_saved).replace("{label}", label).replace("{next}", next));
+    state.label = next;
+    $("label").value = next;
+    schedule();
+  }
+
+  // Opens a saved beam in the calculator: everything the page holds, as setUnits keeps it in step.
+  function openState(next) {
+    for (const key of Object.keys(state)) delete state[key];
+    Object.assign(state, structuredClone(next));
+    metricCode = state.units === "si" ? state.code : metricCode;
+    unitsUndo = null;
+    rememberUnits(state.units);
+    t = applyStrings(strings, lang, document, state.units);
+    renderCodes();
+    renderMaterials();
+    for (const field of spec.numbers) $(field.id).value = state[field.id];
+    $("label").value = state.label;
+    for (const id of barIds) {
+      const [group, key] = spec.bars[id];
+      $(id).value = state.rebar[group][key] ?? 0;
+    }
+    renderCombos();
+    renderUnits();
+    $("add").disabled = state.forces.length >= 10;
+    setMode(state.mode);
+  }
+
+  async function downloadList() {
+    const button = $("list-xlsx");
+    const text = button.querySelector("span");
+    const label = text.textContent;
+    button.disabled = true;
+    text.textContent = t.building;
+    try {
+      const [file] = await call("summary", { lang, beams: list.map((entry) => ({ ...entry.payload, layouts: entry.layouts })) });
+      const bytes = Uint8Array.from(atob(file.base64), (character) => character.charCodeAt(0));
+      saveFile(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+        `mento-${t.file_name_list}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast(t.list_dl_done);
+    } catch (error) {
+      $("notices").innerHTML = notice("bad", `<b>${t.cannot}</b> <span class="mono">${error.message}</span>`) + $("notices").innerHTML;
+    } finally {
+      text.textContent = label;
+      button.disabled = list.length === 0;
+    }
+  }
+
   // ------------------------------------------------------------ wiring
   function setMode(mode) {
     state.mode = mode;
@@ -928,6 +1047,7 @@ export async function start(spec) {
     linkHome();
     t = applyStrings(strings, lang, document, state.units);
     renderCombos();
+    if (spec.collection) renderList();
     if (lastResult) render(lastResult);
     else { renderPlaceholders(); renderPreview(); }
     renderPython();
@@ -1031,6 +1151,29 @@ export async function start(spec) {
     copy(lastResult?.detailed ?? "", t.text_copied);
   });
   $("report").addEventListener("click", downloadReport);
+  if (spec.collection) {
+    $("list-save").addEventListener("click", saveToList);
+    $("list-xlsx").addEventListener("click", downloadList);
+    $("list-clear").addEventListener("click", () => {
+      if (!confirm(t.list_clear_confirm.replace("{n}", list.length))) return;
+      list = [];
+      storeList();
+      renderList();
+    });
+    $("list").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-label]");
+      const entry = button && list.find((item) => item.label === button.dataset.label);
+      if (!entry) return;
+      if (button.classList.contains("bm-rm")) {
+        list = list.filter((item) => item !== entry);
+        storeList();
+        renderList();
+      } else {
+        openState(entry.state);
+      }
+    });
+    renderList();
+  }
 
   // The drawing, as an image on the clipboard. The PNG goes in as a promise so that Safari still
   // counts the click as the gesture; where images cannot be written there, the file is saved.

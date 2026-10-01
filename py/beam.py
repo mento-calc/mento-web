@@ -8,6 +8,8 @@ be exercised from a normal interpreter too::
 
 from __future__ import annotations
 
+import base64
+import io
 import json
 import math
 import warnings
@@ -621,3 +623,99 @@ def report(payload: str) -> str:
     beam, node = _checked(data, forces, layouts)
     content = common.write_report([node.flexure_results_detailed_doc, node.shear_results_detailed_doc], beam.label)
     return json.dumps([{"name": f"{beam.label} - {data['code']}.docx", "base64": content}])
+
+
+# ------------------------------------------------------------------------ the beam list
+# Every beam the visitor saved, in the Excel BeamSummary reads (mento.BeamSummary): one row per
+# combination of each beam, under its Label, with the bars of the face that combination pulls.
+
+SUMMARY_COLUMNS = [
+    "Label", "Comb.", "b", "h", "cc", "Nx", "Vz", "My", "ns", "dbs", "sl",
+    "n1", "db1", "n2", "db2", "n3", "db3", "n4", "db4",
+]  # fmt: skip
+
+
+def _summary_units(units: common.Units) -> list[str]:
+    """The units row under the headings, in the system the beams were designed in."""
+    length = units.labels["length"]
+    bar = "in" if units.us else "mm"
+    moment = "kip·ft" if units.us else "kNm"
+    cover = "in" if units.us else "mm"
+    force = units.labels["force"]
+    return [
+        "", "", length, length, cover, force, force, moment, "", bar, length,
+        "", bar, "", bar, "", bar, "", bar,
+    ]  # fmt: skip
+
+
+def _summary_bars(layout: dict[str, Any], units: common.Units) -> list[float]:
+    """n1, db1 ... n4, db4 of a face: zeros where the layout has no group."""
+    out: list[float] = []
+    for index in range(1, 5):
+        n = int(layout.get(f"n{index}") or 0)
+        out.extend([n, _summary_bar(layout[f"d{index}"], units) if n else 0])
+    return out
+
+
+def _summary_bar(d: float, units: common.Units) -> float:
+    """A layout's bar as the sheet writes it: its diameter in mm, or in inches for an ASTM size."""
+    return round(float(units.bar(d).to("inch" if units.us else "mm").magnitude), 4)
+
+
+def _beam_rows(data: dict[str, Any]) -> list[list[Any]]:
+    units = common.units_of(data)
+    layouts = data.get("layouts") or {}
+    label = str(data.get("label") or "B1")
+    b, h, cover = (common.number(data, key) for key in ("width", "height", "cover"))
+    stirrups = layouts.get("st") or {}
+    transverse = (
+        [int(stirrups["n"]), _summary_bar(stirrups["d"], units), float(stirrups["s"])]
+        if stirrups.get("n")
+        else [0, 0, 0]
+    )
+    rows = []
+    for force in common.build_forces(data):
+        moment = round(float(force.M_y.to(units.moment).magnitude), 6)
+        face = layouts.get("bot" if moment >= 0 else "top") or {}
+        rows.append(
+            [
+                label,
+                force.label,
+                b,
+                h,
+                cover,
+                round(float(force.N_x.to(units.force).magnitude), 6),
+                round(float(force.V_z.to(units.force).magnitude), 6),
+                moment,
+                *transverse,
+                *_summary_bars(face, units),
+            ]
+        )
+    return rows
+
+
+def _summary(data: dict[str, Any]) -> list[dict[str, str]]:
+    import pandas as pd
+
+    beams = data.get("beams") or []
+    if not beams:
+        raise common.InputError("beams", "empty")
+    first = beams[0]
+    for other in beams[1:]:
+        if (other.get("units") or "si") != (first.get("units") or "si"):
+            raise common.InputError("beams", "units")
+        if any(other.get(key) != first.get(key) for key in ("code", "fc", "fy")):
+            raise common.InputError("beams", "materials")
+    units = common.units_of(first)
+    common.materials(first)  # the code, fc and fy are ones mento knows
+    rows = [row for beam_data in beams for row in _beam_rows(beam_data)]
+    frame = pd.DataFrame([_summary_units(units), *rows], columns=SUMMARY_COLUMNS, dtype=object)
+    out = io.BytesIO()
+    frame.to_excel(out, sheet_name="Beams", index=False)
+    return [{"name": "beams.xlsx", "base64": base64.b64encode(out.getvalue()).decode()}]
+
+
+def summary(payload: str) -> str:
+    """The saved beams as one Excel, as ``[{"name", "base64"}]``. Raises ``InputError`` the way
+    ``report`` does: the worker sends it back as an error."""
+    return json.dumps(_summary(json.loads(payload)))

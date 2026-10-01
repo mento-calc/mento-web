@@ -884,3 +884,27 @@ a.btn--sec:hover,a.btn--sec:active{color:var(--ink)}
   .viz-draw .dw-dt,.viz-prop,.viz-prop .opt,.viz-verdict,.viz-verdict .mark,.viz-verdict .meter i{animation:none}
   .meter i{transition:none}
 }
+
+/* the list of saved beams (beam/): one row each, the open one marked, the rest a click away */
+.beams-t{margin:0;padding:14px var(--s-4) 4px;font-size:var(--fs-16);font-weight:600}
+.beams .hint{padding:6px var(--s-4) 4px}
+.beams .hint a{color:var(--brand-ink)}
+.beams-hint{padding-bottom:12px !important}
+.beams-list{list-style:none;margin:6px 0 0;padding:0;border-top:var(--bw) solid var(--line-3)}
+.bm{display:flex;align-items:stretch;border-bottom:var(--bw) solid var(--line-3)}
+.bm[aria-current="true"]{background:var(--brand-soft);box-shadow:inset 3px 0 0 var(--brand)}
+.bm-open{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;padding:10px var(--s-4);background:none;border:0;text-align:left;cursor:pointer;color:inherit;font:inherit}
+.bm-open:hover{background:var(--surface-2)} .bm[aria-current="true"] .bm-open:hover{background:transparent}
+.bm-top{display:flex;align-items:baseline;gap:var(--s-3);flex-wrap:wrap}
+.bm-name{font-size:var(--fs-14);font-weight:600}
+.bm-size,.bm-combos{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--ink-2)}
+.bm-top .dcr{margin-left:auto;font-size:var(--fs-12);font-weight:500;padding:1px 7px;border-radius:999px;align-self:center}
+.bm-top .dcr.ok{background:var(--ok-soft);color:var(--ok-ink)}
+.bm-top .dcr.warn{background:var(--warn-soft);color:var(--warn-ink)}
+.bm-top .dcr.bad{background:var(--bad-soft);color:var(--bad-ink)}
+.bm-bars{display:flex;flex-wrap:wrap;gap:2px var(--s-3);font-family:var(--font-mono);font-size:var(--fs-12)}
+.bm-bars .k{font-family:var(--font-sans);color:var(--ink-2)}
+.bm-rm{flex:none;width:40px;background:none;border:0;border-left:var(--bw) solid var(--line-3);color:var(--ink-2);font-size:18px;cursor:pointer}
+.bm-rm:hover{background:var(--bad-soft);color:var(--bad-ink)}
+.beams .actions{align-items:center}
+@media (max-width:720px){ .bm-rm{width:var(--ctl-h-touch)} .beams-t{padding-top:12px} .beams{border-left:0;border-right:0;border-radius:0} }

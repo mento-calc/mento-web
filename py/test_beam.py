@@ -445,3 +445,71 @@ def test_report_joins_flexure_and_shear_without_a_blank_page():
     assert before.tag == qn("w:tbl"), "the flexure part ends on its last table, not on an empty paragraph"
     title = "".join(node.text or "" for node in elements[breaks[0]].iter(qn("w:t")))
     assert "shear" in title.lower()
+
+
+# ------------------------------------------------------------------ the beam list (Excel)
+
+
+def saved(**changes):
+    """A beam as the page saves it in its list: the payload it sent, with the layouts it got back."""
+    data = {**beam.EXAMPLE, **changes}
+    result = json.loads(beam.run(json.dumps(data)))
+    assert result["ok"], result
+    return {**data, "layouts": result["layouts"]}
+
+
+def sheet(beams):
+    import pandas as pd
+
+    (file,) = json.loads(beam.summary(json.dumps({"lang": "es", "beams": beams})))
+    return pd.read_excel(io.BytesIO(base64.b64decode(file["base64"])), sheet_name="Beams")
+
+
+def test_the_excel_has_mentos_columns_and_a_row_for_every_combination():
+    frame = sheet([saved(), saved(label="V-102", height=50)])
+    assert list(frame.columns) == beam.SUMMARY_COLUMNS
+    assert frame.iloc[0].tolist()[2:8] == ["cm", "cm", "mm", "kN", "kN", "kNm"]
+    assert frame["Label"].tolist()[1:] == ["V-101"] * 3 + ["V-102"] * 3
+    assert frame["Comb."].tolist()[1:4] == ["1.4D", "1.2D+1.6L", "0.9D+1.0E"]
+
+
+def test_each_row_carries_the_face_its_moment_pulls_and_the_stirrups_of_the_beam():
+    data = saved()
+    layouts = data["layouts"]
+    frame = sheet([data]).iloc[1:].reset_index(drop=True)
+    for _, row in frame.iterrows():
+        face = layouts["bot" if row["My"] >= 0 else "top"]
+        assert [row[f"n{i}"] for i in range(1, 5)] == [face.get(f"n{i}", 0) for i in range(1, 5)]
+        assert [row[f"db{i}"] for i in range(1, 5)] == [face.get(f"d{i}", 0) for i in range(1, 5)]
+        assert [row["ns"], row["dbs"], row["sl"]] == [layouts["st"]["n"], layouts["st"]["d"], layouts["st"]["s"]]
+    assert frame["My"].tolist() == [55, 92, -45]
+
+
+def test_beams_of_other_materials_do_not_share_an_excel():
+    with pytest.raises(common.InputError) as error:
+        sheet([saved(), saved(label="V-102", fc=30)])
+    assert error.value.field == "beams"
+    with pytest.raises(common.InputError):
+        sheet([saved(), saved(label="V-102", code="ACI 318-19")])
+    with pytest.raises(common.InputError):
+        sheet([])
+
+
+def test_a_us_list_writes_inches_and_the_bar_diameters():
+    data = saved(**{k: v for k, v in beam.EXAMPLE_US.items() if k != "lang"})
+    frame = sheet([data])
+    assert frame.iloc[0].tolist()[2:8] == ["in", "in", "in", "kip", "kip", "kip·ft"]
+    first = frame.iloc[1]
+    assert first["My"] == 45
+    assert first["db1"] == data["layouts"]["bot"]["d1"] * 0.125  # an ASTM size is eighths of an inch: #6 is 0.75 in
+    assert first["dbs"] == data["layouts"]["st"]["d"] * 0.125
+
+
+def test_mento_reads_the_excel_and_checks_every_row():
+    """What the page hands over is a BeamSummary input: it builds, and every row passes."""
+    from mento import BeamSummary
+
+    for data in (saved(), saved(**{k: v for k, v in beam.EXAMPLE_US.items() if k != "lang"})):
+        concrete, steel = common.materials(data)
+        checked = BeamSummary(concrete=concrete, steel_bar=steel, beam_list=sheet([data])).check()
+        assert checked["¿Ok?"].tolist()[1:] == ["✅"] * len(data["forces"])

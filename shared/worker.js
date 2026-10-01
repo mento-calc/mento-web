@@ -2,7 +2,7 @@
 // Each calculator starts it as `worker.js?module=<name>`, which loads `py/<name>.py`.
 // A glue module exposes run(json) -> json, report(json) -> json and an EXAMPLE dict.
 // With `&prefetch=1` (the home page) it builds the saved environment (below) if there is none, and quits.
-// Protocol: {id, type: "run" | "report", payload} -> {id, ok, result | error}
+// Protocol: {id, type: "run" | "report" | "summary", payload} -> {id, ok, result | error}
 // plus unsolicited {type: "progress", step} and {type: "ready", version} on startup.
 
 const PYODIDE_VERSION = "0.29.5";
@@ -205,7 +205,7 @@ async function boot(saved, dev) {
   if (!saved) api.run(JSON.stringify(api.EXAMPLE.toJs({ dict_converter: Object.fromEntries })));
   // a wheel names its own version; the pinned release is the one the page already shows
   const version = dev ? pyodide.runPython("import mento; mento.__version__") : MENTO_VERSION;
-  return { api, version, save: since === null ? null : () => saveEnv(pyodide, since) };
+  return { api, pyodide, version, save: since === null ? null : () => saveEnv(pyodide, since) };
 }
 
 async function start() {
@@ -233,7 +233,7 @@ const apiPromise = start().then(
     self.postMessage({ type: "ready", version: booted.version });
     // After "ready", so the first visit does not wait for it; the first run queues behind the tar.
     booted.save?.();
-    return booted.api;
+    return booted;
   },
   (error) => {
     self.postMessage({ type: "fatal", error: String(error) });
@@ -241,11 +241,24 @@ const apiPromise = start().then(
   },
 );
 
+// The Excel of a list of beams is written by pandas with openpyxl, which almost nobody needs: it
+// is fetched the first time one is asked for, not on every visit (it is not in PYODIDE_PACKAGES).
+let excelWriter = null;
+function loadExcelWriter(pyodide) {
+  excelWriter ??= pyodide.loadPackage("openpyxl").catch(async () => {
+    await pyodide.loadPackage("micropip");
+    await pyodide.pyimport("micropip").install("openpyxl");
+  });
+  excelWriter.catch(() => { excelWriter = null; });  // a failed attempt is tried again next time
+  return excelWriter;
+}
+
 self.onmessage = async ({ data }) => {
   const { id, type, payload } = data;
   try {
-    const api = await apiPromise;
-    const fn = type === "report" ? api.report : api.run;
+    const { api, pyodide } = await apiPromise;
+    if (type === "summary") await loadExcelWriter(pyodide);
+    const fn = { report: api.report, summary: api.summary }[type] ?? api.run;
     self.postMessage({ id, ok: true, result: JSON.parse(fn(JSON.stringify(payload))) });
   } catch (error) {
     self.postMessage({ id, ok: false, error: String(error) });
