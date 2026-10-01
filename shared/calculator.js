@@ -638,12 +638,20 @@ export async function start(spec) {
       $("detailed").innerHTML = `<pre class="textblock">${escapeHtml(result.detailed)}</pre>`;
       return;
     }
-    // A cross may carry the clause it fails under ("❌ 9.3.3.1": not tension-controlled): kept beside it.
+    // A mark may carry a code beside it: the clause it fails under ("❌ 9.3.3.1": not tension-controlled)
+    // or why it passes ("✅ D.R.": doubly reinforced; "✅ 9.6.1.3": the relieved minimum). The code stays
+    // beside the mark, and the table explains each one below.
     const mark = (value) => {
-      const clause = value.startsWith("❌") ? value.slice(1).trim() : "";
-      const [kind, icon, word] = value === "✅" ? ["ok", "i-check", t.passes] : value.startsWith("❌") ? ["bad", "i-cross", t.fails] : [];
-      return kind ? `<span class="dtl-mark ${kind}" title="${word}"><svg width="12" height="12" aria-hidden="true"><use href="#${icon}"/></svg>`
-        + `<span class="vh">${word}</span>${escapeHtml(clause)}</span>` : null;
+      const [, sign, code = ""] = value.match(/^(✅|❌)\s*(.*)$/) ?? [];
+      if (!sign) return null;
+      const [kind, icon, word] = sign === "✅" ? ["ok", "i-check", t.passes] : ["bad", "i-cross", t.fails];
+      return `<span class="dtl-mark ${kind}${code ? " has-code" : ""}" title="${word}"><svg width="12" height="12" aria-hidden="true"><use href="#${icon}"/></svg>`
+        + `<span class="vh">${word}</span>${escapeHtml(code)}</span>`;
+    };
+    const codeNotes = (table) => {
+      const codes = [...new Set(table.rows.map((row) => row.at(-1).replace(/^(✅|❌)\s*/, "")).filter(Boolean))];
+      const items = codes.map((code) => [code, t[`note_${code === "D.R." ? "DR" : code}`]]).filter(([, text]) => text);
+      return items.length ? `<dl class="dtl-notes">${items.map(([code, text]) => `<div><dt>${escapeHtml(code)}</dt><dd>${escapeHtml(text).replace(/A_([\p{L},]+)/gu, "<i>A</i><sub>$1</sub>")}</dd></div>`).join("")}</dl>` : "";
     };
     const cellHtml = (value) => mark(value) ?? escapeHtml(value);
     const card = (table) => {
@@ -677,7 +685,7 @@ export async function start(spec) {
           + `${cell(min, escapeHtml(low))}${cell(max, escapeHtml(high))}<td class="ok">${status}</td></tr>`;
       }).join("");
       return `<div class="dtl-card dtl-card--checks"><div class="dtl-t">${escapeHtml(table.title)}</div>`
-        + `<table class="dtl-tb">${head}<tbody>${rows}</tbody></table></div>`;
+        + `<table class="dtl-tb">${head}<tbody>${rows}</tbody></table>${codeNotes(table)}</div>`;
     };
     $("detailed").innerHTML = result.reports.map((report) => `<section class="dtl-report"><h3 class="dtl-h">${escapeHtml(sentence(report.title))}</h3>`
       + `<div class="dtl-grid">${report.tables.map(card).join("")}</div></section>`).join("");
