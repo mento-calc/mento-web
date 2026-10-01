@@ -488,7 +488,7 @@ def test_each_row_carries_the_face_its_moment_pulls_and_the_stirrups_of_the_beam
 def test_beams_of_other_materials_do_not_share_an_excel():
     with pytest.raises(common.InputError) as error:
         sheet([saved(), saved(label="V-102", fc=30)])
-    assert error.value.field == "beams"
+    assert error.value.field == "list"
     with pytest.raises(common.InputError):
         sheet([saved(), saved(label="V-102", code="ACI 318-19")])
     with pytest.raises(common.InputError):

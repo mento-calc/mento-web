@@ -10,6 +10,7 @@ import base64
 import contextlib
 import copy
 import io
+import json
 import math
 import os
 import re
@@ -567,3 +568,46 @@ def write_report(writers: list[Callable[[], Any]], name: str) -> str:
 def safe_label(label: str) -> str:
     """mento puts the label in the names of the files it writes, so it has to be a valid one."""
     return "".join("_" if char in r'\/:*?"<>|' else char for char in label)
+
+
+# ------------------------------------------------------------------------ the list of saved sections
+# What every calculator's list of saved sections hands over: one Excel in the input format of mento's
+# summary of that element (a sheet of rows under a row of units).
+
+
+def shared_materials(items: list[dict[str, Any]]) -> Units:
+    """The system of a list of saved sections, once they all share it and their materials: a summary
+    takes one concrete and one steel. ``InputError`` on ``beams`` otherwise, or when the list is empty."""
+    if not items:
+        raise InputError("list", "empty")
+    first = items[0]
+    for other in items[1:]:
+        if (other.get("units") or "si") != (first.get("units") or "si"):
+            raise InputError("list", "units")
+        if any(other.get(key) != first.get(key) for key in ("code", "fc", "fy")):
+            raise InputError("list", "materials")
+    materials(first)  # the code, fc and fy are ones mento knows
+    return units_of(first)
+
+
+def summary_file(sheet: str, name: str, columns: list[str], units_row: list[str], rows: list[list[Any]]) -> str:
+    """The Excel of a summary, as ``[{"name", "base64"}]``: the headings, the units row, the rows."""
+    import pandas as pd
+
+    frame = pd.DataFrame([units_row, *rows], columns=columns, dtype=object)
+    out = io.BytesIO()
+    frame.to_excel(out, sheet_name=sheet, index=False)
+    return json.dumps([{"name": name, "base64": base64.b64encode(out.getvalue()).decode()}])
+
+
+def summary_forces(data: dict[str, Any], units: Units) -> list[tuple[str, float, float, float]]:
+    """The combinations of a section, as the sheet writes them: label, Nx, Vz and My in the system's units."""
+    return [
+        (
+            force.label,
+            round(float(force.N_x.to(units.force).magnitude), 6),
+            round(float(force.V_z.to(units.force).magnitude), 6),
+            round(float(force.M_y.to(units.moment).magnitude), 6),
+        )
+        for force in build_forces(data)
+    ]

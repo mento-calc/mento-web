@@ -257,3 +257,41 @@ def report(payload: str) -> str:
     slab, node = _checked(data, forces, layouts)
     content = common.write_report([node.flexure_results_detailed_doc, node.shear_results_detailed_doc], slab.label)
     return json.dumps([{"name": f"{slab.label} - {data['code']}.docx", "base64": content}])
+
+
+# ------------------------------------------------------------------------ the list of saved slabs
+# Every slab the visitor saved, in the Excel OneWaySlabSummary reads (mento >= 1.5.0): one row per
+# combination of each slab, with the diameter and spacing of the face its moment pulls.
+
+SUMMARY_COLUMNS = ["Label", "Comb.", "b", "h", "cc", "Nx", "Vz", "My", "db1", "s1", "db3", "s3"]
+
+
+def _summary_units(units: common.Units) -> list[str]:
+    length = units.labels["length"]
+    bar = "in" if units.us else "mm"
+    cover = "in" if units.us else "mm"
+    moment = "kip·ft" if units.us else "kNm"
+    force = units.labels["force"]
+    return ["", "", length, length, cover, force, force, moment, bar, length, bar, length]
+
+
+def _summary_rows(data: dict[str, Any]) -> list[list[Any]]:
+    units = common.units_of(data)
+    layouts = data.get("layouts") or {}
+    label = str(data.get("label") or "L1")
+    b, h, cover = (common.number(data, key) for key in ("width", "height", "cover"))
+    rows = []
+    for comb, n_x, v_z, m_y in common.summary_forces(data, units):
+        face = layouts.get("bot" if m_y >= 0 else "top") or {}
+        bar = round(float(units.bar(face["d"]).to("inch" if units.us else "mm").magnitude), 4) if face else 0
+        rows.append([label, comb, b, h, cover, n_x, v_z, m_y, bar, float(face.get("s") or 0), 0, 0])
+    return rows
+
+
+def summary(payload: str) -> str:
+    """The saved slabs as one Excel, as ``[{"name", "base64"}]``, in the input format of
+    ``OneWaySlabSummary``. Raises ``InputError`` the way ``report`` does."""
+    slabs = json.loads(payload).get("slabs") or []
+    units = common.shared_materials(slabs)
+    rows = [row for slab_data in slabs for row in _summary_rows(slab_data)]
+    return common.summary_file("Slabs", "slabs.xlsx", SUMMARY_COLUMNS, _summary_units(units), rows)

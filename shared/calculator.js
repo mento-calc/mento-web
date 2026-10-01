@@ -899,9 +899,12 @@ export async function start(spec) {
   }
 
   // ------------------------------------------------------------ the list of saved beams
-  // A calculator that sets `collection` keeps the designs the visitor saves, to hand them over in one
-  // Excel (py/beam.py summary). BeamSummary takes one concrete and one steel, so every beam of the
-  // list shares units, code, fc and fy.
+  // A calculator that sets `collection` ({ key, fallback, size }) keeps the designs the visitor saves,
+  // to hand them over in one Excel (summary() in its py/ module, which reads them under `key`).
+  // mento's summaries take one concrete and one steel, so every item of the list shares units, code,
+  // fc and fy. `fallback` names an item with no label; `size` writes its dimensions (width × height).
+  const collection = spec.collection;
+  const sizeOf = collection?.size ?? ((entry, U) => `${fmt(entry.width)}×${fmt(entry.height)} ${U.len}`);
   const LIST_KEY = `mento-${spec.module}-list`;
   let list = [];
   try {
@@ -922,7 +925,7 @@ export async function start(spec) {
   }
 
   const shares = (a, b) => ["units", "code", "fc", "fy"].every((key) => (a[key] ?? "si") === (b[key] ?? "si"));
-  const listLabel = () => String(state.label ?? "").trim() || "B1";
+  const listLabel = () => String(state.label ?? "").trim() || collection.fallback;
 
   function renderList() {
     const label = listLabel();
@@ -934,12 +937,12 @@ export async function start(spec) {
     $("list").innerHTML = list.map((entry) => {
       const U = UNITS[entry.payload.units || "si"];
       const combos = entry.payload.forces.filter((force) => spec.forces.some((key) => force[key])).length;
-      const bars = [["bot", entry.rebar?.bot], ["top", entry.rebar?.top], ["st", entry.rebar?.st]].filter(([, value]) => value)
+      const bars = Object.entries(entry.rebar ?? {}).filter(([, value]) => value)
         .map(([key, value]) => `<span><span class="k">${t[key]}</span> ${escapeHtml(value)}</span>`).join("");
       const name = escapeHtml(entry.label);
       return `<li class="bm"${entry.label === state.label ? ' aria-current="true"' : ""}>`
         + `<button type="button" class="bm-open" data-label="${name}" aria-label="${escapeHtml(t.list_open.replace("{label}", entry.label))}">`
-        + `<span class="bm-top"><b class="bm-name">${name}</b><span class="bm-size">${fmt(entry.payload.width)}×${fmt(entry.payload.height)} ${U.len}</span>`
+        + `<span class="bm-top"><b class="bm-name">${name}</b><span class="bm-size">${sizeOf(entry.payload, U)}</span>`
         + `<span class="bm-combos">${t.list_combos.replace("{n}", combos)}</span>`
         + `<span class="dcr ${entry.status}">${two(entry.dcr)}</span></span>`
         + `<span class="bm-bars">${bars}</span></button>`
@@ -999,7 +1002,7 @@ export async function start(spec) {
     button.disabled = true;
     text.textContent = t.building;
     try {
-      const [file] = await call("summary", { lang, beams: list.map((entry) => ({ ...entry.payload, layouts: entry.layouts })) });
+      const [file] = await call("summary", { lang, [collection.key]: list.map((entry) => ({ ...entry.payload, layouts: entry.layouts })) });
       const bytes = Uint8Array.from(atob(file.base64), (character) => character.charCodeAt(0));
       saveFile(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
         `mento-${t.file_name_list}-${new Date().toISOString().slice(0, 10)}.xlsx`);

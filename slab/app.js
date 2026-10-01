@@ -115,6 +115,7 @@ const barsFromLayouts = (layouts) => ({
 
 start({
   module: "slab",
+  collection: { key: "slabs", fallback: "L1" },
   example: EXAMPLE,
   exampleUS: EXAMPLE_US,
   numbers: [

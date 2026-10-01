@@ -4,6 +4,7 @@ import base64
 import io
 import json
 
+import common
 import docx
 import pytest
 
@@ -120,3 +121,67 @@ def test_report_is_the_shear_check_in_word():
     assert file["name"] == "W1_2 - CIRSOC 201-25.docx"
     document = docx.Document(io.BytesIO(base64.b64decode(file["base64"])))
     assert "shear" in " ".join(paragraph.text.lower() for paragraph in document.paragraphs)
+
+
+# ------------------------------------------------------------------ the wall list (Excel)
+
+
+def saved(**changes):
+    """A wall as the page saves it in its list: the payload it sent, with the layouts it got back."""
+    data = {**wall.EXAMPLE, **changes}
+    result = json.loads(wall.run(json.dumps(data)))
+    assert result["ok"], result
+    return {**data, "layouts": result["layouts"]}
+
+
+def sheet(walls, lang="es"):
+    import pandas as pd
+
+    (file,) = json.loads(wall.summary(json.dumps({"lang": lang, "walls": walls})))
+    return pd.read_excel(io.BytesIO(base64.b64decode(file["base64"])), sheet_name="Walls")
+
+
+def test_the_excel_has_the_summary_columns_and_a_row_for_every_combination():
+    frame = sheet([saved(), saved(label="T-102", thickness=25)])
+    assert list(frame.columns) == wall.SUMMARY_COLUMNS
+    assert frame.iloc[0].tolist()[3:] == ["kN", "kN", "kNm", "cm", "m", "m", "mm", "mm", "cm", "mm", "cm"]
+    assert frame["Label"].tolist()[1:] == ["T-101"] * 2 + ["T-102"] * 2
+    assert set(frame["Level"].tolist()[1:]) == {"Nivel 1"}
+    assert frame["lw"].tolist()[1:3] == [3, 3]  # typed as 300 cm, read in m
+
+
+def test_every_row_carries_both_meshes():
+    data = saved()
+    frame = sheet([data]).iloc[1:]
+    mesh = data["layouts"]
+    for _, row in frame.iterrows():
+        assert [row["dbh"], row["sh"], row["dbv"], row["sv"]] == [
+            mesh["horizontal"]["d"], mesh["horizontal"]["s"], mesh["vertical"]["d"], mesh["vertical"]["s"],
+        ]  # fmt: skip
+
+
+def test_walls_of_other_materials_do_not_share_an_excel():
+    with pytest.raises(common.InputError) as error:
+        sheet([saved(), saved(label="T-102", fc=30)])
+    assert error.value.field == "list"
+    with pytest.raises(common.InputError):
+        sheet([])
+
+
+def test_mento_reads_the_excel_and_checks_every_wall():
+    """Metric and US: the Excel is a ShearWallSummary input, the rows of a label are one wall."""
+    from mento import ShearWallSummary
+
+    for data in (saved(), saved(**{k: v for k, v in wall.EXAMPLE_US.items() if k != "lang"})):
+        concrete, steel = common.materials(data)
+        frame = sheet([data])
+        summary = ShearWallSummary(concrete=concrete, steel_bar=steel, wall_list=frame)
+        assert len(summary.nodes) == 1
+        assert len(summary.nodes[0].forces) == len(data["forces"])
+        assert len(summary.check()) >= 1
+
+
+def test_a_us_list_writes_feet_and_inches():
+    frame = sheet([saved(**{k: v for k, v in wall.EXAMPLE_US.items() if k != "lang"})], lang="en")
+    assert frame.iloc[0].tolist()[3:] == ["kip", "kip", "kipft", "in", "ft", "ft", "in", "in", "in", "in", "in"]
+    assert frame.iloc[1]["lw"] == 10 and frame["Level"].iloc[1] == "Level 1"

@@ -8,8 +8,6 @@ be exercised from a normal interpreter too::
 
 from __future__ import annotations
 
-import base64
-import io
 import json
 import math
 import warnings
@@ -674,48 +672,16 @@ def _beam_rows(data: dict[str, Any]) -> list[list[Any]]:
         else [0, 0, 0]
     )
     rows = []
-    for force in common.build_forces(data):
-        moment = round(float(force.M_y.to(units.moment).magnitude), 6)
-        face = layouts.get("bot" if moment >= 0 else "top") or {}
-        rows.append(
-            [
-                label,
-                force.label,
-                b,
-                h,
-                cover,
-                round(float(force.N_x.to(units.force).magnitude), 6),
-                round(float(force.V_z.to(units.force).magnitude), 6),
-                moment,
-                *transverse,
-                *_summary_bars(face, units),
-            ]
-        )
+    for comb, n_x, v_z, m_y in common.summary_forces(data, units):
+        face = layouts.get("bot" if m_y >= 0 else "top") or {}
+        rows.append([label, comb, b, h, cover, n_x, v_z, m_y, *transverse, *_summary_bars(face, units)])
     return rows
 
 
-def _summary(data: dict[str, Any]) -> list[dict[str, str]]:
-    import pandas as pd
-
-    beams = data.get("beams") or []
-    if not beams:
-        raise common.InputError("beams", "empty")
-    first = beams[0]
-    for other in beams[1:]:
-        if (other.get("units") or "si") != (first.get("units") or "si"):
-            raise common.InputError("beams", "units")
-        if any(other.get(key) != first.get(key) for key in ("code", "fc", "fy")):
-            raise common.InputError("beams", "materials")
-    units = common.units_of(first)
-    common.materials(first)  # the code, fc and fy are ones mento knows
-    rows = [row for beam_data in beams for row in _beam_rows(beam_data)]
-    frame = pd.DataFrame([_summary_units(units), *rows], columns=SUMMARY_COLUMNS, dtype=object)
-    out = io.BytesIO()
-    frame.to_excel(out, sheet_name="Beams", index=False)
-    return [{"name": "beams.xlsx", "base64": base64.b64encode(out.getvalue()).decode()}]
-
-
 def summary(payload: str) -> str:
-    """The saved beams as one Excel, as ``[{"name", "base64"}]``. Raises ``InputError`` the way
-    ``report`` does: the worker sends it back as an error."""
-    return json.dumps(_summary(json.loads(payload)))
+    """The saved beams as one Excel, as ``[{"name", "base64"}]``, in the input format of
+    ``BeamSummary``. Raises ``InputError`` the way ``report`` does: the worker sends it back as an error."""
+    beams = json.loads(payload).get("beams") or []
+    units = common.shared_materials(beams)
+    rows = [row for beam_data in beams for row in _beam_rows(beam_data)]
+    return common.summary_file("Beams", "beams.xlsx", SUMMARY_COLUMNS, _summary_units(units), rows)

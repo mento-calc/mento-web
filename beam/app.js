@@ -212,7 +212,7 @@ function barsFromLayouts(layouts) {
 
 start({
   module: "beam",
-  collection: true,
+  collection: { key: "beams", fallback: "B1" },
   example: EXAMPLE,
   exampleUS: EXAMPLE_US,
   numbers: [

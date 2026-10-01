@@ -5,6 +5,7 @@ import io
 import itertools
 import json
 
+import common
 import docx
 import pytest
 
@@ -124,3 +125,67 @@ def test_bars_closer_than_the_minimum_clear_spacing_fail():
     result = solve(mode="check", rebar={"bot": {"d": 16, "s": 3}, "top": {"d": 12, "s": 25}})
     spacing = [notice for notice in result["notices"] if notice["code"] == "bar_spacing_below_min"]
     assert spacing and spacing[0]["severity"] == "bad" and spacing[0]["values"]["face"] == "bottom"
+
+
+# ------------------------------------------------------------------ the slab list (Excel)
+
+
+def saved(**changes):
+    """A slab as the page saves it in its list: the payload it sent, with the layouts it got back."""
+    data = {**slab.EXAMPLE, **changes}
+    result = json.loads(slab.run(json.dumps(data)))
+    assert result["ok"], result
+    return {**data, "layouts": result["layouts"]}
+
+
+def sheet(slabs):
+    import pandas as pd
+
+    (file,) = json.loads(slab.summary(json.dumps({"lang": "es", "slabs": slabs})))
+    return pd.read_excel(io.BytesIO(base64.b64decode(file["base64"])), sheet_name="Slabs")
+
+
+def test_the_excel_has_the_summary_columns_and_a_row_for_every_combination():
+    frame = sheet([saved(), saved(label="L-102", height=25)])
+    assert list(frame.columns) == slab.SUMMARY_COLUMNS
+    assert frame.iloc[0].tolist()[2:] == ["cm", "cm", "mm", "kN", "kN", "kNm", "mm", "cm", "mm", "cm"]
+    assert frame["Label"].tolist()[1:] == ["L-101"] * 2 + ["L-102"] * 2
+    assert frame["h"].tolist()[1:] == [20, 20, 25, 25]
+
+
+def test_each_row_carries_the_face_its_moment_pulls():
+    data = saved()
+    layouts = data["layouts"]
+    frame = sheet([data]).iloc[1:].reset_index(drop=True)
+    assert frame["My"].tolist() == [32, -22]
+    for _, row in frame.iterrows():
+        face = layouts["bot" if row["My"] >= 0 else "top"]
+        assert [row["db1"], row["s1"], row["db3"], row["s3"]] == [face["d"], face["s"], 0, 0]
+
+
+def test_slabs_of_other_materials_do_not_share_an_excel():
+    with pytest.raises(common.InputError) as error:
+        sheet([saved(), saved(label="L-102", fy=500)])
+    assert error.value.field == "list"
+    with pytest.raises(common.InputError):
+        sheet([])
+
+
+def test_a_us_list_writes_inches_and_the_bar_diameters():
+    data = saved(**{k: v for k, v in slab.EXAMPLE_US.items() if k != "lang"})
+    frame = sheet([data])
+    assert frame.iloc[0].tolist()[2:] == ["in", "in", "in", "kip", "kip", "kip·ft", "in", "in", "in", "in"]
+    assert frame.iloc[1]["db1"] == data["layouts"]["bot"]["d"] * 0.125  # #3 is 0.375 in
+
+
+def test_mento_reads_the_excel():
+    """From mento 1.5.0 OneWaySlabSummary reads it and checks every row; before it, there is nothing to read it."""
+    import mento
+
+    summary = getattr(mento, "OneWaySlabSummary", None)
+    if summary is None:
+        pytest.skip(f"mento {mento.__version__} has no OneWaySlabSummary")
+    data = saved()
+    concrete, steel = common.materials(data)
+    checked = summary(concrete, steel, sheet([data])).check()
+    assert len(checked) >= 1

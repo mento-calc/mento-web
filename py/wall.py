@@ -266,3 +266,67 @@ def report(payload: str) -> str:
     wall, _ = _checked(data, forces, layouts)
     content = common.write_report([wall.shear_results_detailed_doc], wall.label)
     return json.dumps([{"name": f"{wall.label} - {data['code']}.docx", "base64": content}])
+
+
+# ------------------------------------------------------------------------ the list of saved walls
+# Every wall the visitor saved, in the Excel ShearWallSummary reads: one row per combination of each
+# wall, grouped by its Level and Label. The page has no storeys, so every wall is on the one level.
+
+SUMMARY_COLUMNS = [
+    "Level", "Label", "Comb.", "Nx", "Vz", "My", "t", "lw", "hw", "cc", "dbh", "sh", "dbv", "sv",
+]  # fmt: skip
+LEVELS = {"es": "Nivel 1", "en": "Level 1"}
+
+
+def _summary_units(units: common.Units) -> list[str]:
+    """lw and hw in m (ft), t in cm (in), the mesh in mm and cm (in); the moment of a US wall is ``kipft``."""
+    length = units.labels["length"]
+    bar = "in" if units.us else "mm"
+    span = "ft" if units.us else "m"
+    cover = "in" if units.us else "mm"
+    moment = "kipft" if units.us else "kNm"
+    force = units.labels["force"]
+    return ["", "", "", force, force, moment, length, span, span, cover, bar, length, bar, length]
+
+
+def _summary_rows(data: dict[str, Any], level: str) -> list[list[Any]]:
+    units = common.units_of(data)
+    layouts = data.get("layouts") or {}
+    label = str(data.get("label") or "W1")
+    thickness, length, height, cover = (
+        common.number(data, key) for key in ("thickness", "length", "wall_height", "cover")
+    )
+    # the page types a metric wall's length and height in cm; the summary reads them in m
+    scale = 1 if units.us else 0.01
+    meshes = []
+    for group in GROUPS:
+        mesh = layouts.get(group) or {}
+        bar = round(float(units.bar(mesh["d"]).to("inch" if units.us else "mm").magnitude), 4) if mesh else 0
+        meshes.extend([bar, float(mesh.get("s") or 0)])
+    return [
+        [
+            level,
+            label,
+            comb,
+            n_x,
+            v_z,
+            m_y,
+            thickness,
+            round(length * scale, 6),
+            round(height * scale, 6),
+            cover,
+            *meshes,
+        ]
+        for comb, n_x, v_z, m_y in common.summary_forces(data, units)
+    ]
+
+
+def summary(payload: str) -> str:
+    """The saved walls as one Excel, as ``[{"name", "base64"}]``, in the input format of
+    ``ShearWallSummary``. Raises ``InputError`` the way ``report`` does."""
+    data = json.loads(payload)
+    walls = data.get("walls") or []
+    units = common.shared_materials(walls)
+    level = LEVELS.get(data.get("lang"), LEVELS["en"])
+    rows = [row for wall_data in walls for row in _summary_rows(wall_data, level)]
+    return common.summary_file("Walls", "walls.xlsx", SUMMARY_COLUMNS, _summary_units(units), rows)
