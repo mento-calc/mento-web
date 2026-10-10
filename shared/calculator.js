@@ -72,7 +72,7 @@ export const UNITS = {
 export const ASTM = { 3: 0.375, 4: 0.5, 5: 0.625, 6: 0.75, 7: 0.875, 8: 1, 9: 1.128, 10: 1.27, 11: 1.41, 14: 1.693 };
 const METRIC_BARS = [6, 8, 10, 12, 16, 20, 25, 32];
 // How the rebar fields name a bar and a spacing: Ø16 c/15 cm, or #5 @ 6 in (the results write them Ø16c/15cm, #5@6in).
-const SYMBOLS = { si: { bar: "Ø", st: "eØ", at: "c/" }, us: { bar: "#", st: "×#", at: "@" } };
+const SYMBOLS = { si: { bar: "Ø", at: "c/" }, us: { bar: "#", at: "@" } };
 // A length as a label writes it: 20, 7.5, never 7.500000001.
 export const fmt = (value) => String(Number(Number(value).toFixed(2)));
 
@@ -117,7 +117,9 @@ const CONVERT = {
   ],
 };
 
-const HASH_VERSION = "1";
+// "2" since a beam's stirrups are counted by their legs, as mento counts them. A "1" link is still
+// read: a page whose fields changed meaning says how (spec.fromV1).
+const HASH_VERSION = "2";
 
 // ------------------------------------------------------------ detailed results
 // mento's printed tables, laid out (py/common.py reads them). A symbol as the printout spells it,
@@ -212,7 +214,8 @@ export async function start(spec) {
     if (!location.hash.startsWith("#v")) return null;
     try {
       const params = new URLSearchParams(location.hash.slice(1));
-      if (params.get("v") !== HASH_VERSION) return null;
+      const linked = params.get("v");
+      if (linked !== HASH_VERSION && linked !== "1") return null;
       // a link from before the units carries none: it was metric
       const units = params.get("u") === "us" ? "us" : "si";
       const next = exampleFor(units);
@@ -233,13 +236,15 @@ export async function start(spec) {
       if (forces.length) next.forces = forces;
       // a link made before a calculator grew fields carries fewer; the new ones keep the example's
       const bars = (params.get("r") || "").split(",");
-      if (bars.length > 1 && bars.length <= barIds.length) {
+      const carried = bars.length > 1 && bars.length <= barIds.length;
+      if (carried) {
         bars.forEach((value, index) => {
           const [group, key] = spec.bars[barIds[index]];
           next.rebar[group][key] = Number(value);
         });
       }
       next.choice = Object.fromEntries(groups.map((group, index) => [group, (params.get("ch") || "").split(";")[index] || ""]));
+      if (linked === "1") spec.fromV1?.(next, { bars: carried });
       return next;
     } catch {
       return null;
@@ -390,8 +395,10 @@ export async function start(spec) {
   function showSaved() {
     try {
       const saved = JSON.parse(localStorage.getItem(SAVED_KEY));
-      // a result without "complies" is from before mento 1.3.0: its verdict read the DCR alone
-      if (saved?.payload !== JSON.stringify(payload()) || !saved.result?.ok || !("complies" in saved.result)) return;
+      // A result of another mento is not this page's: each release may judge, and shape, it differently.
+      // The markup names the mento the page runs (py/test_site.py keeps it in step with the worker).
+      const current = saved?.result?.ok && saved.result.version === $("version").textContent;
+      if (saved?.payload !== JSON.stringify(payload()) || !current) return;
       applied = version;
       render(saved.result);
     } catch {
@@ -431,6 +438,15 @@ export async function start(spec) {
       input.toggleAttribute("aria-invalid", bad);
     }
     if (!state.forces.some((force) => spec.forces.some((key) => num(force[key])))) ok = false;
+    // the bars count only when they are the user's: in design mode mento places its own
+    for (const field of spec.barRules || []) {
+      const message = state.mode === "check" ? t[field.rule(state, num)] || "" : "";
+      $(field.id).classList.toggle("is-invalid", Boolean(message));
+      $(field.id).toggleAttribute("aria-invalid", Boolean(message));
+      $(field.error).hidden = !message;
+      $(field.error).textContent = message;
+      ok = ok && !message;
+    }
     showInvalidStrip(ok);
     return ok;
   }
@@ -485,8 +501,13 @@ export async function start(spec) {
   };
 
   // ------------------------------------------------------------ rendering
+  // What mento says about the section, in the three levels the glue reads off its categories
+  // (py/common.py SEVERITY): what fails it, what is left pending, and what is only a note.
+  const LEVELS = { bad: ["i-cross", "notice_bad"], warn: ["i-warn", "notice"], info: ["i-info", "notice_info"] };
+  const level = (item) => (item.severity in LEVELS ? item.severity : "warn");
+
   function notice(kind, text) {
-    const mark = `<svg width="16" height="16"><use href="#${kind === "bad" ? "i-cross" : "i-warn"}"/></svg>`;
+    const mark = `<svg width="16" height="16"><use href="#${LEVELS[kind][0]}"/></svg>`;
     return `<div class="notice notice--${kind}" role="${kind === "bad" ? "alert" : "status"}">${mark}<span>${text}</span></div>`;
   }
 
@@ -498,9 +519,10 @@ export async function start(spec) {
 
     const governing = Math.max(...result.ledger.map((row) => row.dcr ?? 0));
     // The DCR alone does not decide. A limit of the code the section misses (mento's warnings: the
-    // minimum steel, bars that do not fit) fails it as a DCR above one would, and so does a section
-    // mento says does not comply (ACI/CIRSOC: not tension-controlled, whatever its DCR). The number
-    // stays; the word and the notices say why not.
+    // minimum steel, bars that do not fit, a cage that cannot be detailed) fails it as a DCR above
+    // one would, and so does a section mento says does not comply (ACI/CIRSOC: not tension-controlled,
+    // whatever its DCR). The number stays; the word and the notices say why not. What mento leaves
+    // pending or only notes (the skin a deep beam requires) fails nothing.
     const failed = result.complies === false || result.notices.some((item) => item.severity === "bad");
     const status = failed ? "bad" : dcrState(governing);
     const word = status === "bad" ? t.fails : status === "warn" ? t.passes_limit : t.passes;
@@ -527,7 +549,7 @@ export async function start(spec) {
       const width = Math.min(row.dcr ?? 0, 1) * 100;
       const detail = row.combo
         ? `${row.symbol} ${row.capacity} ${row.dcr > 1 ? "&lt;" : "≥"} ${row.demand_symbol} ${row.demand} ${row.unit} · ${row.combo}`
-        : `${row.symbol} ${row.capacity} ${row.unit} · ${t.no_demand}`;
+        : row.capacity ? `${row.symbol} ${row.capacity} ${row.unit} · ${t.no_demand}` : t.no_steel;
       const state = rowState(row);
       return `<div class="row"><div><div class="name">${t[row.key]}</div><div class="detail">${detail}</div></div>`
         + `<div class="meter" data-state="${state}"><i style="width:${width}%"></i><s></s></div>`
@@ -547,13 +569,20 @@ export async function start(spec) {
       fill.style.width = target;
     });
 
-    // errors first: they are why the verdict says what it says
-    const ordered = [...result.notices].sort((a, b) => (b.severity === "bad") - (a.severity === "bad"));
-    $("notices").innerHTML = ordered.map((item) => notice(item.severity === "bad" ? "bad" : "warn", noticeText(item))).join("");
-    $("warn-count").textContent = result.notices.length === 0 ? t.nowarn
-      : result.notices.length === 1 ? t.warn_one : t.warn_many.replace("{n}", result.notices.length);
+    // errors first: they are why the verdict says what it says; notes last
+    const order = Object.keys(LEVELS);
+    const ordered = [...result.notices].sort((a, b) => order.indexOf(level(a)) - order.indexOf(level(b)));
+    $("notices").innerHTML = ordered.map((item) => notice(level(item), noticeText(item))).join("");
+    const notes = result.notices.filter((item) => level(item) === "info").length;
+    const flagged = result.notices.length - notes;
+    const counted = (count, one, many) => (count === 1 ? one : many.replace("{n}", count));
+    $("warn-count").textContent = [
+      flagged && counted(flagged, t.warn_one, t.warn_many), notes && counted(notes, t.note_one, t.note_many),
+    ].filter(Boolean).join(" · ") || t.nowarn;
 
     renderGroups(result);
+    // what the section carries besides its groups (a beam's skin and mounting bars), in both modes
+    if ($("extras")) $("extras").innerHTML = spec.extras?.(result, t) ?? "";
     // Bars that were not in the drawing before appear one after another; the rest stay still.
     const drawn = new Set([...$("drawing").querySelectorAll(".dw-bar")].map(barKey));
     const previewed = $("drawing").dataset.preview === "1";  // the section was up, its bars were not
@@ -631,8 +660,16 @@ export async function start(spec) {
     };
     const cellHtml = (value) => mark(value) ?? escapeHtml(value);
     const card = (table) => {
+      // The states mento keeps apart, resistance and detailing, each with its notes: its own words.
+      if (table.columns.length === 2) {
+        const rows = table.rows.map(([name, status, notes]) => `<tr><th scope="row">${escapeHtml(name)}</th>`
+          + `<td class="state">${escapeHtml(status)}${notes ? `<span class="notes">${escapeHtml(notes)}</span>` : ""}</td></tr>`).join("");
+        return `<div class="dtl-card dtl-card--state"><div class="dtl-t">${escapeHtml(table.title)}</div><table class="dtl-tb"><tbody>${rows}</tbody></table></div>`;
+      }
       if (table.columns.length <= 3) {
         const rows = table.rows.map(([name, symbol, value, unit]) => {
+          // a line with no value is a remark on the rows around it (which row of a table applies)
+          if (!symbol && !value && !unit) return `<tr class="is-remark"><th scope="row" colspan="4">${escapeHtml(name)}</th></tr>`;
           const state = symbol === "DCR" ? dcrState(Number(value)) : "";
           return `<tr${state ? ' class="is-dcr"' : ""}><th scope="row">${escapeHtml(name)}</th><td class="var">${symbolHtml(symbol)}</td>`
             + `<td class="val${state ? ` dcr ${state}` : ""}">${cellHtml(value)}</td><td class="unit">${cellHtml(unit)}</td></tr>`;
@@ -675,7 +712,7 @@ export async function start(spec) {
   // they come, with the combinations they hold under. Their codes (not_tension_controlled,
   // As_below_min...) are mento's, stable, and kept on the notice; the page does not reword them.
   function noticeText(item) {
-    const lead = `<b>${item.severity === "bad" ? t.notice_bad : t.notice}</b>`;
+    const lead = `<b>${t[LEVELS[level(item)][1]]}</b>`;
     const combos = item.values?.combos?.length ? ` <span class="mono">· ${escapeHtml(item.values.combos.join(", "))}</span>` : "";
     return `${lead} ${escapeHtml(item.message ?? item.values?.message ?? "")}${combos}`;
   }
@@ -863,7 +900,8 @@ export async function start(spec) {
 
   // ------------------------------------------------------------ the list of saved beams
   // A calculator that sets `collection` ({ key, fallback, size }) keeps the designs the visitor saves,
-  // to hand them over in one Excel (summary() in its py/ module, which reads them under `key`).
+  // to hand them over in one Excel (summary() in its py/ module, which reads them under `key`): the
+  // two sheets mento's summary of that element writes and reads, Sections and Forces.
   // mento's summaries take one concrete and one steel, so every item of the list shares units, code,
   // fc and fy. `fallback` names an item with no label; `size` writes its dimensions (width × height).
   const collection = spec.collection;
@@ -965,13 +1003,16 @@ export async function start(spec) {
     button.disabled = true;
     text.textContent = t.building;
     try {
-      const [file] = await call("summary", { lang, [collection.key]: list.map((entry) => ({ ...entry.payload, layouts: entry.layouts })) });
+      const file = await call("summary", { lang, [collection.key]: list.map((entry) => ({ ...entry.payload, layouts: entry.layouts })) });
+      // what a summary cannot hold (two combinations of a section under one name) mento says itself
+      if (!file.ok) throw new Error(file.message);
       const bytes = Uint8Array.from(atob(file.base64), (character) => character.charCodeAt(0));
       saveFile(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
         `mento-${t.file_name_list}-${new Date().toISOString().slice(0, 10)}.xlsx`);
       toast(t.list_dl_done);
     } catch (error) {
-      $("notices").innerHTML = notice("bad", `<b>${t.cannot}</b> <span class="mono">${error.message}</span>`) + $("notices").innerHTML;
+      $("notices").innerHTML = notice("bad", `<b>${t.list_cannot}</b> ${escapeHtml(error.message)}`) + $("notices").innerHTML;
+      $("notices").scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "center" });
     } finally {
       text.textContent = label;
       button.disabled = list.length === 0;
@@ -1018,6 +1059,9 @@ export async function start(spec) {
     else { renderPlaceholders(); renderPreview(); }
     renderPython();
     writeHash();
+    // mento words its notices, its detailed results and the legs of a beam's stirrups in the
+    // language it is asked in: what is on screen until it answers is the page's own, translated.
+    schedule({ now: true });
   }
 
   async function downloadReport() {

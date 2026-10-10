@@ -1,5 +1,5 @@
 # Keep in step with MENTO_VERSION in shared/worker.js.
-mento==1.4.0
+mento==1.6.0
 pytest
 ruff==0.16.8  # pinned: CI and local must lint with the same rules
 openpyxl

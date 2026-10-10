@@ -28,15 +28,18 @@ function beamDrawing(data, hooks) {
   const hook = (name) => (hooks ? ` data-hero="${name}"` : "");
   const low = data.bars.filter(([, y]) => y < data.height / 2);
   const high = data.bars.filter(([, y]) => y >= data.height / 2);
-  const inset = data.cover * scale;
-  const label = (y, text, name, [x1, extra] = [w - 16, ""]) => `<line x1="${x1}" y1="${y}" x2="${w + 30}" y2="${y}"`
-    + ` stroke="#5b6470" stroke-width=".8"/><text class="dw-label${extra}" x="${w + 34}" y="${Number(y) + 3.5}" font-size="14"${hook(name)}>${text}</text>`;
+  const { x0, x1, y0, y1 } = data.closed;  // the stirrup, by its centreline
+  const label = (y, text, name, [from, extra] = [w - 16, ""]) => `<line x1="${from}" y1="${y}" x2="${w + 16}" y2="${y}"`
+    + ` stroke="#5b6470" stroke-width=".8"/><text class="dw-label${extra}" x="${w + 20}" y="${Number(y) + 3.5}" font-size="14"${hook(name)}>${text}</text>`;
+  // "per side" is the dictionary's: it comes with the rest of the page's words
+  const skin = `<tspan${hook("skin")}>${data.skin}</tspan> <tspan data-i18n="per_side"></tspan>`;
   return `<rect class="dw-concrete" x="0" y="0" width="${w}" height="300"/>`
-    + `<rect class="dw-stirrup" x="${inset}" y="${inset}" width="${w - 2 * inset}" height="${300 - 2 * inset}" rx="5"`
-    + ` style="stroke-width:${(data.stirrup * scale).toFixed(1)}"/>`
+    + `<rect class="dw-stirrup" x="${cx(x0)}" y="${cy(y1)}" width="${cx(x1 - x0)}" height="${((y1 - y0) * scale).toFixed(2)}"`
+    + ` rx="${(((data.stirrup.bend + data.stirrup.d) / 2) * scale).toFixed(1)}" style="stroke-width:${(data.stirrup.d * scale).toFixed(1)}"/>`
     + low.map(([x, y, d]) => `<circle class="dw-bar"${hooks ? " data-mid" : ""} cx="${cx(x)}" cy="${cy(y)}" r="${r(d)}"/>`).join("")
-    + high.map(([x, y, d]) => `<circle class="dw-bar" cx="${cx(x)}" cy="${cy(y)}" r="${r(d)}"/>`).join("")
-    + label(cy(high[0][1]), data.top, "top") + label(150, data.stirrups, "stirrups", [w - 12, " dw-label--stirrup"])
+    + [...high, ...data.skin_bars].map(([x, y, d]) => `<circle class="dw-bar" cx="${cx(x)}" cy="${cy(y)}" r="${r(d)}"/>`).join("")
+    + label(cy(high[0][1]), data.top, "top") + label(112, data.stirrups, "stirrups", [w - 11, " dw-label--stirrup"])
+    + label(cy(data.skin_bars[0][1]), skin, null, [w - 13, ""])
     + label(cy(low[0][1]), data.options[0].bars, "bottom")
     + `<path class="dw-dl" d="M0 304V318M${w} 304V318M-4 314H${w + 4}M-3 317L3 311M${w - 3} 317L${w + 3} 311"/>`
     + `<text class="dw-dt" x="${w / 2}" y="330" text-anchor="middle"${hook("width")}>${data.width} in</text>`
@@ -53,19 +56,27 @@ function showUnits(next) {
   if (next !== "us") return;
   const data = HERO_US;
   Object.assign(hero.dataset, { top: data.data_top, st: data.data_st, scale: 300 / data.height });
-  // room on the right for the labels, the height's dimension line on the left
-  const left = Math.min(70, 310 - (data.width * 300) / data.height - 110);
+  // room on the right for the labels (the stirrups' is the longest), the height's dimension line on the left
+  const left = Math.max(32, Math.min(56, 310 - (data.width * 300) / data.height - 124));
   for (const [svg, hooks] of [[hero.querySelector(".viz-draw svg"), true], [card, false]]) {
     const group = svg.querySelector("g");
     group.setAttribute("transform", `translate(${left},10)`);
     group.innerHTML = beamDrawing(data, hooks);
   }
-  hero.querySelectorAll(".opt").forEach((option, index) => {
-    const values = data.options[index];
+  // As many options as mento proposes in this system, which need not be as many as in the other:
+  // the markup's first is the mould of them all.
+  const mould = hero.querySelector(".opt");
+  const more = hero.querySelector(".viz-prop .more");
+  hero.querySelectorAll(".opt").forEach((option) => option.remove());
+  data.options.forEach((values, index) => {
+    const option = mould.cloneNode(true);
     Object.assign(option.dataset, { sig: values.sig, mid: values.low });
-    option.querySelector(".val").textContent = values.bars;
-    option.querySelector(".area").textContent = values.area;
-    option.querySelector(".dcr").textContent = values.dcr;
+    option.querySelector("input").checked = index === 0;
+    for (const [name, text, cell] of [[".val", values.bars, `opt${index + 1}`], [".area", values.area], [".dcr", values.dcr, `opt${index + 1}_dcr`]]) {
+      option.querySelector(name).textContent = text;
+      if (cell) option.querySelector(name).dataset.hero = cell;
+    }
+    more.before(option);
   });
   const bottom = Number(data.options[0].dcr);
   const [top, shear] = [Number(data.top_dcr), Number(data.shear_dcr)];
@@ -105,13 +116,14 @@ const fixed2 = (value) => value.toFixed(2);
 const groups = (signature) => signature.split("+").map((group) => group.split("x").map(Number));
 
 // The calculator's link (shared/calculator.js readHash): what it leaves out stays the example's.
-// In check mode its bar fields go in their order: bottom and top first rows, stirrups, second rows.
+// In check mode its bar fields go in their order: bottom and top first rows, stirrups (by their
+// legs), second rows.
 function linkHero(option) {
   const face = (signature) => [0, 1, 2, 3].map((index) => groups(signature)[index] || [0, 0]);
   const [bottom, top] = [face(option.dataset.sig), face(hero.dataset.top)];
   const [, n, d, s] = /^(\d+)x(\d+)@(\d+)$/.exec(hero.dataset.st);
   const bars = [...bottom[0], ...bottom[1], ...top[0], ...top[1], n, d, s, ...bottom[2], ...bottom[3], ...top[2], ...top[3]];
-  const params = new URLSearchParams({ v: "1", l: lang, u: units, m: "check", r: bars.join(",") });
+  const params = new URLSearchParams({ v: "2", l: lang, u: units, m: "check", r: bars.join(",") });
   hero.querySelector("#hero-check").href = `beam/#${params}`;
 }
 

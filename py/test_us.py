@@ -16,7 +16,8 @@ import wall
 
 MODULES = [beam, slab, wall]
 BARS = re.compile(r"\d+#\d+(\+\d+#\d+)*")  # 2#6+1#4
-MESH = re.compile(r"(\d+×)?#\d+@\d+(\.\d+)?in")  # #4@12in, 2×#3@8in
+MESH = re.compile(r"#\d+@\d+(\.\d+)?in")  # #4@12in
+STIRRUPS = re.compile(r"1s(\+\d+l)?#\d+@\d+(\.\d+)?in")  # 1s#3@8in, 1s+2l#3@8in: a stirrup and the legs beyond it
 
 
 def solve(module, **changes):
@@ -49,7 +50,7 @@ def test_the_ledger_speaks_kip_and_kip_ft():
 def test_a_beam_names_its_bars_by_astm_size():
     result = solve(beam)
     assert BARS.fullmatch(result["rebar"]["bot"]) and BARS.fullmatch(result["rebar"]["top"])
-    assert MESH.fullmatch(result["rebar"]["st"])
+    assert STIRRUPS.fullmatch(result["rebar"]["st"])
     for group in ("bot", "top"):
         for option in result["options"][group]:
             assert BARS.fullmatch(option["bars"]) and option["area"].endswith(" in²")
@@ -72,18 +73,28 @@ def test_a_mesh_is_a_bar_size_at_whole_inches(module):
 
 
 def test_check_mode_takes_bar_sizes_and_inches():
-    rebar = {"bot": {"n1": 3, "d1": 6}, "top": {"n1": 2, "d1": 5}, "stirrups": {"n": 1, "d": 3, "s": 8}}
+    rebar = {"bot": {"n1": 3, "d1": 6}, "top": {"n1": 2, "d1": 5}, "stirrups": {"n": 2, "d": 3, "s": 8}}
     result = solve(beam, mode="check", rebar=rebar)
     assert result["ok"], result
-    assert result["rebar"] == {"bot": "3#6", "top": "2#5", "st": "#3@8in"}
+    assert result["rebar"] == {"bot": "3#6", "top": "2#5", "st": "1s#3@8in"}
     assert result["flexure"]["bottom"]["A_s"] == "1.33 in²"  # three 0.75 in bars
-    assert result["section"]["stirrups"] == {"n": 1, "d": 0.375}
-    assert sorted(bar["d"] for bar in result["section"]["bars"]) == [0.625, 0.625, 0.75, 0.75, 0.75]
+    assert result["section"]["stirrup"] == {"d": 0.375, "bend": 1.5}  # a #3 bent on four diameters
+    main = [bar["d"] for bar in result["section"]["bars"] if bar["kind"] == "main"]
+    assert sorted(main) == [0.625, 0.625, 0.75, 0.75, 0.75]
 
 
-def test_two_stirrups_are_counted_before_the_bar():
-    rebar = {"bot": {"n1": 3, "d1": 6}, "top": {}, "stirrups": {"n": 2, "d": 3, "s": 8}}
-    assert solve(beam, mode="check", rebar=rebar)["rebar"]["st"] == "2×#3@8in"
+def test_the_stirrups_are_counted_by_their_legs():
+    rebar = {"bot": {"n1": 4, "d1": 6}, "top": {"n1": 4, "d1": 5}, "stirrups": {"n": 4, "d": 3, "s": 8}}
+    result = solve(beam, mode="check", rebar=rebar, width=24)
+    assert result["rebar"]["st"] == "1s+2l#3@8in" and len(result["section"]["ties"]) == 2
+
+
+def test_a_beam_24_in_deep_gets_its_skin_in_astm_sizes():
+    """mento lays skin out from 24 in, a #3 up to a 16 in web, and weighs the cage in lb/yd³."""
+    result = solve(beam)
+    assert result["skin"] == {"bars": "1#3", "status": "proposed"}
+    assert [bar["d"] for bar in result["section"]["bars"] if bar["kind"] == "skin"] == [0.375, 0.375]
+    assert result["section"]["steel"].endswith(" lb/yd³")
 
 
 def test_a_slab_and_a_wall_check_the_mesh_typed():
@@ -94,7 +105,7 @@ def test_a_slab_and_a_wall_check_the_mesh_typed():
 
 
 def test_a_bar_size_that_does_not_exist_is_an_input_error():
-    rebar = {"bot": {"n1": 3, "d1": 12}, "top": {}, "stirrups": {"n": 1, "d": 3, "s": 8}}  # no #12 bar
+    rebar = {"bot": {"n1": 3, "d1": 12}, "top": {}, "stirrups": {"n": 2, "d": 3, "s": 8}}  # no #12 bar
     assert solve(beam, mode="check", rebar=rebar) == {
         "ok": False,
         "kind": "input",
@@ -131,9 +142,9 @@ def test_a_chosen_option_survives_a_recalculation():
 def test_the_drawing_is_in_inches():
     section = solve(beam)["section"]
     assert (section["width"], section["height"], section["cover"], section["unit"]) == (12, 24, 1.5, "in")
-    edge = section["cover"] + section["stirrups"]["d"]
-    for bar in section["bars"]:
-        assert edge <= bar["x"] - bar["d"] / 2 and bar["x"] + bar["d"] / 2 <= section["width"] - edge + 1e-9
+    edge = section["cover"] + section["stirrup"]["d"]
+    for bar in section["bars"]:  # to the thousandth of an inch the glue rounds to
+        assert edge <= bar["x"] - bar["d"] / 2 + 1e-3 and bar["x"] + bar["d"] / 2 <= section["width"] - edge + 1e-3
     # a wall's length is typed in feet and drawn in inches, to the same scale as its thickness
     section = solve(wall)["section"]
     assert (section["length"], section["thickness"], section["unit"]) == (120, 8, "in")
@@ -142,12 +153,12 @@ def test_the_drawing_is_in_inches():
 
 def test_the_same_beam_carries_the_same_moment_in_either_system():
     """The units only change how it is written: 12x24 in with 3#6 is 30.48x60.96 cm with 3Ø19.05."""
-    rebar_us = {"bot": {"n1": 3, "d1": 6}, "top": {"n1": 2, "d1": 5}, "stirrups": {"n": 1, "d": 3, "s": 8}}
+    rebar_us = {"bot": {"n1": 3, "d1": 6}, "top": {"n1": 2, "d1": 5}, "stirrups": {"n": 2, "d": 3, "s": 8}}
     us = solve(beam, mode="check", rebar=rebar_us)
     rebar_si = {
         "bot": {"n1": 3, "d1": 19.05},
         "top": {"n1": 2, "d1": 15.875},
-        "stirrups": {"n": 1, "d": 9.525, "s": 20.32},
+        "stirrups": {"n": 2, "d": 9.525, "s": 20.32},
     }
     forces = [
         {"label": row["label"], "M_y": row["M_y"] * 1.3558, "V_z": row["V_z"] * 4.4482, "N_x": 0}

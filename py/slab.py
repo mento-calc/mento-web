@@ -13,7 +13,7 @@ from typing import Any
 
 import common
 import mento
-from mento import Node, OneWaySlab, ureg
+from mento import Node, OneWaySlab, OneWaySlabSummary, ureg
 
 # The worked example every visitor opens: a 20 cm slab spanning about 5 m, with a support moment.
 EXAMPLE: dict[str, Any] = {
@@ -92,12 +92,18 @@ def _apply(slab: OneWaySlab, layouts: dict[str, Any], units: common.Units) -> No
         slab.set_slab_longitudinal_rebar_top(d_b1=units.bar(top["d"]), s_b1=top["s"] * ureg(units.length))
 
 
-def _checked(data: dict[str, Any], forces: list[Any], layouts: dict[str, Any]) -> tuple[OneWaySlab, Node]:
-    """A fresh strip with that mesh in it, checked. Fresh because designing or checking leaves
-    state behind on the section."""
+def _reinforced(data: dict[str, Any], forces: list[Any], layouts: dict[str, Any]) -> tuple[OneWaySlab, Node]:
+    """A fresh strip with that mesh in it, under its combinations."""
     slab = _build(data)
     node = Node(section=slab, forces=forces)
     _apply(slab, layouts, common.units_of(data))
+    return slab, node
+
+
+def _checked(data: dict[str, Any], forces: list[Any], layouts: dict[str, Any]) -> tuple[OneWaySlab, Node]:
+    """A fresh strip with that mesh in it, checked. Fresh because designing or checking leaves
+    state behind on the section."""
+    slab, node = _reinforced(data, forces, layouts)
     node.check()
     return slab, node
 
@@ -260,38 +266,19 @@ def report(payload: str) -> str:
 
 
 # ------------------------------------------------------------------------ the list of saved slabs
-# Every slab the visitor saved, in the Excel OneWaySlabSummary reads (mento >= 1.5.0): one row per
-# combination of each slab, with the diameter and spacing of the face its moment pulls.
-
-SUMMARY_COLUMNS = ["Label", "Comb.", "b", "h", "cc", "Nx", "Vz", "My", "db1", "s1", "db3", "s3"]
-
-
-def _summary_units(units: common.Units) -> list[str]:
-    length = units.labels["length"]
-    bar = "in" if units.us else "mm"
-    cover = "in" if units.us else "mm"
-    moment = "kip·ft" if units.us else "kNm"
-    force = units.labels["force"]
-    return ["", "", length, length, cover, force, force, moment, bar, length, bar, length]
+# Every slab the visitor saved, in the Excel ``OneWaySlabSummary.from_excel`` reads: a row per slab
+# in Sections, with the diameter and spacing of both faces, and a row per combination in Forces.
+# mento writes it (common.summary_excel), from each strip as the page checked it.
 
 
-def _summary_rows(data: dict[str, Any]) -> list[list[Any]]:
-    units = common.units_of(data)
-    layouts = data.get("layouts") or {}
-    label = str(data.get("label") or "L1")
-    b, h, cover = (common.number(data, key) for key in ("width", "height", "cover"))
-    rows = []
-    for comb, n_x, v_z, m_y in common.summary_forces(data, units):
-        face = layouts.get("bot" if m_y >= 0 else "top") or {}
-        bar = round(float(units.bar(face["d"]).to("inch" if units.us else "mm").magnitude), 4) if face else 0
-        rows.append([label, comb, b, h, cover, n_x, v_z, m_y, bar, float(face.get("s") or 0), 0, 0])
-    return rows
+def _saved(data: dict[str, Any]) -> Node:
+    """A saved slab: what the page sent, with the layouts it got back."""
+    return _reinforced(data, common.build_forces(data), data.get("layouts") or {})[1]
 
 
 def summary(payload: str) -> str:
-    """The saved slabs as one Excel, as ``[{"name", "base64"}]``, in the input format of
-    ``OneWaySlabSummary``. Raises ``InputError`` the way ``report`` does."""
-    slabs = json.loads(payload).get("slabs") or []
-    units = common.shared_materials(slabs)
-    rows = [row for slab_data in slabs for row in _summary_rows(slab_data)]
-    return common.summary_file("Slabs", "slabs.xlsx", SUMMARY_COLUMNS, _summary_units(units), rows)
+    """The saved slabs as one Excel. Never raises: errors come back as ``{"ok": false}``."""
+    data = json.loads(payload)
+    return common.summary_excel(
+        OneWaySlabSummary, data.get("slabs") or [], _saved, "slabs.xlsx", data.get("lang", "en")
+    )

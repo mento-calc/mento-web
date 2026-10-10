@@ -28,10 +28,14 @@ from mento import (
     Concrete_EN_1992_2004,
     Forces,
     SteelBar,
+    SummaryInputError,
+    available_languages,
     bar_designation,
     bar_diameter,
+    set_language,
     ureg,
 )
+from mento.verification import warning_category
 
 CONCRETES = {
     "ACI 318-19": Concrete_ACI_318_19,
@@ -384,7 +388,7 @@ def spacing_options(
 
 def signature(layout: dict[str, Any]) -> str:
     """Short, stable name of a layout: what the URL keeps and what re-picks it after a recalc."""
-    if "s" in layout and "n" in layout:  # stirrups: count, diameter and spacing
+    if "s" in layout and "n" in layout:  # stirrups: legs, diameter and spacing
         return f"{layout['n']:g}x{layout['d']:g}@{layout['s']:g}"
     if "s" in layout:  # a mesh: diameter at a spacing
         return f"{layout['d']:g}@{layout['s']:g}"
@@ -415,19 +419,26 @@ def captured_notices(captured: list[Any]) -> list[dict[str, Any]]:
     return [{"code": "mento", "severity": "warn", "values": {"message": str(item.message)}} for item in captured]
 
 
+# What each of mento's warning categories (``mento.verification.warning_category``) is to the page.
+# A strength the section lacks ("resistance") or a limit of the code it misses ("failed": spacing,
+# bars that do not fit, a cage that cannot be detailed) fails the element, whatever its DCR. A check
+# mento leaves pending is flagged and fails nothing, and a note only informs (the skin a deep beam
+# requires, which mento lays out). A code mento has not classed is pending.
+SEVERITY = {"resistance": "bad", "failed": "bad", "pending": "warn", "informative": "info"}
+
+
 def warning_notices(element: Any, captured: list[Any]) -> list[dict[str, Any]]:
     """What the page flags, as mento judges it: its Python warnings, then its ``DesignWarning``s.
 
-    Every ``DesignWarning`` is a limit of the code the section misses (minimum or maximum steel,
-    spacing, bars that do not fit, a section that is not tension-controlled), so each one fails the
-    element, whatever its DCR. ``code`` is mento's stable one; the page shows ``message``, which
-    mento writes in the language set with ``mento.set_language``."""
+    ``severity`` is the page's reading of mento's category (``SEVERITY``): only "bad" fails the
+    element. ``code`` is mento's stable one; the page shows ``message``, which mento writes in the
+    language set with ``mento.set_language``."""
     notices = captured_notices(captured)
     for warning in element.warnings:
         notices.append(
             {
                 "code": warning.code,
-                "severity": "bad",
+                "severity": SEVERITY.get(warning_category(warning.code), "warn"),
                 "message": warning.message,
                 "values": {
                     "face": warning.face,
@@ -563,13 +574,15 @@ def safe_label(label: str) -> str:
 
 
 # ------------------------------------------------------------------------ the list of saved sections
-# What every calculator's list of saved sections hands over: one Excel in the input format of mento's
-# summary of that element (a sheet of rows under a row of units).
+# What every calculator's list of saved sections hands over: one Excel that mento's summary of that
+# element writes itself (``from_nodes`` and ``to_excel``) and reads back with ``from_excel``. It has
+# two sheets: Sections, a row per section with the reinforcement of both faces, and Forces, a row per
+# combination. Nothing of that format is copied here.
 
 
 def shared_materials(items: list[dict[str, Any]]) -> Units:
     """The system of a list of saved sections, once they all share it and their materials: a summary
-    takes one concrete and one steel. ``InputError`` on ``beams`` otherwise, or when the list is empty."""
+    takes one concrete and one steel. ``InputError`` on ``list`` otherwise, or when the list is empty."""
     if not items:
         raise InputError("list", "empty")
     first = items[0]
@@ -582,24 +595,27 @@ def shared_materials(items: list[dict[str, Any]]) -> Units:
     return units_of(first)
 
 
-def summary_file(sheet: str, name: str, columns: list[str], units_row: list[str], rows: list[list[Any]]) -> str:
-    """The Excel of a summary, as ``[{"name", "base64"}]``: the headings, the units row, the rows."""
-    import pandas as pd
+def summary_excel(
+    summary: Any, items: list[dict[str, Any]], node: Callable[[dict[str, Any]], Any], name: str, lang: str
+) -> str:
+    """The saved sections as one Excel, ``{"ok": true, "name", "base64"}``. Never raises.
 
-    frame = pd.DataFrame([units_row, *rows], columns=columns, dtype=object)
-    out = io.BytesIO()
-    frame.to_excel(out, sheet_name=sheet, index=False)
-    return json.dumps([{"name": name, "base64": base64.b64encode(out.getvalue()).decode()}])
-
-
-def summary_forces(data: dict[str, Any], units: Units) -> list[tuple[str, float, float, float]]:
-    """The combinations of a section, as the sheet writes them: label, Nx, Vz and My in the system's units."""
-    return [
-        (
-            force.label,
-            round(float(force.N_x.to(units.force).magnitude), 6),
-            round(float(force.V_z.to(units.force).magnitude), 6),
-            round(float(force.M_y.to(units.moment).magnitude), 6),
-        )
-        for force in build_forces(data)
-    ]
+    ``summary`` is mento's summary of the element (``BeamSummary``...) and ``node`` builds the
+    ``Node`` of one saved section, reinforced as the page had it. mento rebuilds each section from
+    the row it writes, so the file it reads back checks as the page did. What a summary cannot
+    hold (two combinations of a section under one name) comes back in mento's own words, in the
+    language of the page."""
+    set_language(lang if lang in available_languages() else "en")
+    try:
+        shared_materials(items)
+        concrete, steel = materials(items[0])
+        out = io.BytesIO()
+        summary.from_nodes(concrete, steel, [node(item) for item in items]).to_excel(out)
+        result = {"ok": True, "name": name, "base64": base64.b64encode(out.getvalue()).decode("ascii")}
+    except InputError as error:
+        result = {"ok": False, "kind": "input", "field": error.field, "message": str(error)}
+    except SummaryInputError as error:
+        result = {"ok": False, "kind": "summary", "message": error.message}
+    except Exception as error:  # noqa: BLE001 - everything must reach the page as JSON
+        result = {"ok": False, "kind": "mento", "message": f"{type(error).__name__}: {error}"}
+    return json.dumps(result)

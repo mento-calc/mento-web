@@ -6,7 +6,7 @@
 // plus unsolicited {type: "progress", step} and {type: "ready", version} on startup.
 
 const PYODIDE_VERSION = "0.29.5";
-const MENTO_VERSION = "1.4.0";
+const MENTO_VERSION = "1.6.0";
 const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 const PYODIDE_PACKAGES = ["numpy", "pandas", "jinja2", "lxml"];
 // mento's own dependencies that Pyodide does not ship (it is installed with deps=False).
@@ -79,10 +79,25 @@ sys.modules["IPython.display"] = display
 // micropip, PyPI and the compiler. The key carries every version, so a new mento (or Pyodide, or
 // package list) misses, rebuilds, and the old entry is deleted.
 const ENV_CACHE = "mento-env";
-const ENV_KEY = new URL(
-  `../mento-env/${PYODIDE_VERSION}/${MENTO_VERSION}/${encodeURIComponent(PYPI_PACKAGES.join(" "))}.tar`,
+const envKey = (mento) => new URL(
+  `../mento-env/${PYODIDE_VERSION}/${mento}/${encodeURIComponent(PYPI_PACKAGES.join(" "))}.tar`,
   self.location.href,
 ).href;
+let ENV_KEY = envKey(MENTO_VERSION);
+
+// A mento that is not on PyPI yet, tried on the site before its release: `python serve.py --wheel
+// <file>` answers dev/mento.json with the wheel to install in place of the pinned one. Asked only
+// on localhost, so the deployed site never makes the request.
+async function devWheel() {
+  if (!["localhost", "127.0.0.1"].includes(self.location.hostname)) return null;
+  try {
+    const response = await fetch(new URL("../dev/mento.json", self.location.href), { cache: "no-store" });
+    const dev = response.ok ? await response.json() : null;
+    return dev && { stamp: dev.stamp, url: new URL(`../dev/${dev.wheel}`, self.location.href).href };
+  } catch {
+    return null;
+  }
+}
 
 const ENV = `
 import os, sys, sysconfig, tarfile, time
@@ -153,7 +168,7 @@ async function saveEnv(pyodide, since) {
   }
 }
 
-async function boot(saved) {
+async function boot(saved, dev) {
   progress("python");
   const pyodide = await loadPyodide({ indexURL: PYODIDE_URL });
 
@@ -170,7 +185,7 @@ async function boot(saved) {
     since = pyodide.globals.get("env_start")();
     const micropip = pyodide.pyimport("micropip");
     await micropip.install(PYPI_PACKAGES);
-    await micropip.install.callKwargs([`mento==${MENTO_VERSION}`], { deps: false });
+    await micropip.install.callKwargs([dev ? dev.url : `mento==${MENTO_VERSION}`], { deps: false });
   }
 
   progress("warmup");
@@ -188,20 +203,24 @@ async function boot(saved) {
   // are compiled before the tar is made; with a saved environment they load as fast as the rest,
   // and running the example here would only put a second calculation before the page's own.
   if (!saved) api.run(JSON.stringify(api.EXAMPLE.toJs({ dict_converter: Object.fromEntries })));
-  return { api, pyodide, save: since === null ? null : () => saveEnv(pyodide, since) };
+  // a wheel names its own version; the pinned release is the one the page already shows
+  const version = dev ? pyodide.runPython("import mento; mento.__version__") : MENTO_VERSION;
+  return { api, pyodide, version, save: since === null ? null : () => saveEnv(pyodide, since) };
 }
 
 async function start() {
+  const dev = await devWheel();
+  if (dev) ENV_KEY = envKey(`dev-${dev.stamp}`);
   const saved = await readEnv();
   if (saved && PREFETCH) return null;
-  if (!saved) return boot(null);
+  if (!saved) return boot(null, dev);
   try {
-    return await boot(saved);
+    return await boot(saved, dev);
   } catch (error) {
     // A saved environment that no longer boots is dropped and rebuilt, not shown as an error.
     console.warn("mento: saved environment failed, rebuilding", error);
     await caches.open(ENV_CACHE).then((cache) => cache.delete(ENV_KEY)).catch(() => {});
-    return boot(null);
+    return boot(null, dev);
   }
 }
 
@@ -211,7 +230,7 @@ const apiPromise = start().then(
       await booted?.save?.();
       return self.close();
     }
-    self.postMessage({ type: "ready", version: MENTO_VERSION });
+    self.postMessage({ type: "ready", version: booted.version });
     // After "ready", so the first visit does not wait for it; the first run queues behind the tar.
     booted.save?.();
     return booted;
