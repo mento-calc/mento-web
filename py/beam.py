@@ -15,7 +15,7 @@ from typing import Any
 
 import common
 import mento
-from mento import Forces, Node, RectangularBeam, ureg
+from mento import BeamSummary, Forces, Node, RectangularBeam, ureg
 from mento.cage_detailing import CageDetailingError, build_cage_detailing
 from mento.design_results import STIRRUPS, transverse_notation
 from mento.plots.sections import steel_ratio
@@ -415,12 +415,18 @@ def _apply_layouts(beam: RectangularBeam, layouts: dict[str, Any], units: common
 # ----------------------------------------------------------------- design options
 
 
-def _checked(data: dict[str, Any], forces: list[Forces], layouts: dict[str, Any]) -> tuple[RectangularBeam, Node]:
-    """A fresh beam with these bars in it, checked. Fresh because designing or checking leaves
-    state behind: the same design run twice on one beam does not give the same stirrups."""
+def _reinforced(data: dict[str, Any], forces: list[Forces], layouts: dict[str, Any]) -> tuple[RectangularBeam, Node]:
+    """A fresh beam with these bars in it, under its combinations."""
     beam = _build_beam(data)
     node = Node(section=beam, forces=forces)
     _apply_layouts(beam, layouts, common.units_of(data))
+    return beam, node
+
+
+def _checked(data: dict[str, Any], forces: list[Forces], layouts: dict[str, Any]) -> tuple[RectangularBeam, Node]:
+    """A fresh beam with these bars in it, checked. Fresh because designing or checking leaves
+    state behind: the same design run twice on one beam does not give the same stirrups."""
+    beam, node = _reinforced(data, forces, layouts)
     node.check()
     return beam, node
 
@@ -624,64 +630,17 @@ def report(payload: str) -> str:
 
 
 # ------------------------------------------------------------------------ the beam list
-# Every beam the visitor saved, in the Excel BeamSummary reads (mento.BeamSummary): one row per
-# combination of each beam, under its Label, with the bars of the face that combination pulls.
-
-SUMMARY_COLUMNS = [
-    "Label", "Comb.", "b", "h", "cc", "Nx", "Vz", "My", "ns", "dbs", "sl",
-    "n1", "db1", "n2", "db2", "n3", "db3", "n4", "db4",
-]  # fmt: skip
+# Every beam the visitor saved, in the Excel ``BeamSummary.from_excel`` reads: a row per beam in
+# Sections, with its stirrups by their legs and the bars of both faces, and a row per combination in
+# Forces. mento writes it (common.summary_excel), from each beam as the page checked it.
 
 
-def _summary_units(units: common.Units) -> list[str]:
-    """The units row under the headings, in the system the beams were designed in."""
-    length = units.labels["length"]
-    bar = "in" if units.us else "mm"
-    moment = "kip·ft" if units.us else "kNm"
-    cover = "in" if units.us else "mm"
-    force = units.labels["force"]
-    return [
-        "", "", length, length, cover, force, force, moment, "", bar, length,
-        "", bar, "", bar, "", bar, "", bar,
-    ]  # fmt: skip
-
-
-def _summary_bars(layout: dict[str, Any], units: common.Units) -> list[float]:
-    """n1, db1 ... n4, db4 of a face: zeros where the layout has no group."""
-    out: list[float] = []
-    for index in range(1, 5):
-        n = int(layout.get(f"n{index}") or 0)
-        out.extend([n, _summary_bar(layout[f"d{index}"], units) if n else 0])
-    return out
-
-
-def _summary_bar(d: float, units: common.Units) -> float:
-    """A layout's bar as the sheet writes it: its diameter in mm, or in inches for an ASTM size."""
-    return round(float(units.bar(d).to("inch" if units.us else "mm").magnitude), 4)
-
-
-def _beam_rows(data: dict[str, Any]) -> list[list[Any]]:
-    units = common.units_of(data)
-    layouts = data.get("layouts") or {}
-    label = str(data.get("label") or "B1")
-    b, h, cover = (common.number(data, key) for key in ("width", "height", "cover"))
-    stirrups = layouts.get("st") or {}
-    transverse = (
-        [int(stirrups["n"]), _summary_bar(stirrups["d"], units), float(stirrups["s"])]
-        if stirrups.get("n")
-        else [0, 0, 0]
-    )
-    rows = []
-    for comb, n_x, v_z, m_y in common.summary_forces(data, units):
-        face = layouts.get("bot" if m_y >= 0 else "top") or {}
-        rows.append([label, comb, b, h, cover, n_x, v_z, m_y, *transverse, *_summary_bars(face, units)])
-    return rows
+def _saved(data: dict[str, Any]) -> Node:
+    """A saved beam: what the page sent, with the layouts it got back."""
+    return _reinforced(data, common.build_forces(data), data.get("layouts") or {})[1]
 
 
 def summary(payload: str) -> str:
-    """The saved beams as one Excel, as ``[{"name", "base64"}]``, in the input format of
-    ``BeamSummary``. Raises ``InputError`` the way ``report`` does: the worker sends it back as an error."""
-    beams = json.loads(payload).get("beams") or []
-    units = common.shared_materials(beams)
-    rows = [row for beam_data in beams for row in _beam_rows(beam_data)]
-    return common.summary_file("Beams", "beams.xlsx", SUMMARY_COLUMNS, _summary_units(units), rows)
+    """The saved beams as one Excel. Never raises: errors come back as ``{"ok": false}``."""
+    data = json.loads(payload)
+    return common.summary_excel(BeamSummary, data.get("beams") or [], _saved, "beams.xlsx", data.get("lang", "en"))

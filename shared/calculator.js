@@ -900,7 +900,8 @@ export async function start(spec) {
 
   // ------------------------------------------------------------ the list of saved beams
   // A calculator that sets `collection` ({ key, fallback, size }) keeps the designs the visitor saves,
-  // to hand them over in one Excel (summary() in its py/ module, which reads them under `key`).
+  // to hand them over in one Excel (summary() in its py/ module, which reads them under `key`): the
+  // two sheets mento's summary of that element writes and reads, Sections and Forces.
   // mento's summaries take one concrete and one steel, so every item of the list shares units, code,
   // fc and fy. `fallback` names an item with no label; `size` writes its dimensions (width × height).
   const collection = spec.collection;
@@ -1002,13 +1003,16 @@ export async function start(spec) {
     button.disabled = true;
     text.textContent = t.building;
     try {
-      const [file] = await call("summary", { lang, [collection.key]: list.map((entry) => ({ ...entry.payload, layouts: entry.layouts })) });
+      const file = await call("summary", { lang, [collection.key]: list.map((entry) => ({ ...entry.payload, layouts: entry.layouts })) });
+      // what a summary cannot hold (two combinations of a section under one name) mento says itself
+      if (!file.ok) throw new Error(file.message);
       const bytes = Uint8Array.from(atob(file.base64), (character) => character.charCodeAt(0));
       saveFile(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
         `mento-${t.file_name_list}-${new Date().toISOString().slice(0, 10)}.xlsx`);
       toast(t.list_dl_done);
     } catch (error) {
-      $("notices").innerHTML = notice("bad", `<b>${t.cannot}</b> <span class="mono">${error.message}</span>`) + $("notices").innerHTML;
+      $("notices").innerHTML = notice("bad", `<b>${t.list_cannot}</b> ${escapeHtml(error.message)}`) + $("notices").innerHTML;
+      $("notices").scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "center" });
     } finally {
       text.textContent = label;
       button.disabled = list.length === 0;

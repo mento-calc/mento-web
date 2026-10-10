@@ -46,7 +46,7 @@
   "list_dl_done": "Excel descargado",
   "list_title": "Tus muros",
   "list_empty": "Guardá este muro y seguí con el próximo: al final descargás todos en un Excel que abre el ShearWallSummary de mento",
-  "list_hint": "El Excel sigue el formato de <a href=\"https://mento-docs.readthedocs.io/en/latest/user_guide/shear_wall_summary.html\">ShearWallSummary</a>: una fila por combinación, con la malla horizontal y la vertical, todo en un mismo nivel.",
+  "list_hint": "El Excel trae las dos hojas que lee <a href=\"https://mento-docs.readthedocs.io/en/latest/user_guide/shear_wall_summary.html\">ShearWallSummary</a>: Sections, una fila por muro con su malla horizontal y la vertical, y Forces, una fila por combinación.",
   "file_name_list": "muros",
   "passes": "Cumple",
   "passes_limit": "Cumple · al límite",
@@ -131,7 +131,8 @@
   "notice_info": "Nota.",
   "note_one": "1 nota",
   "note_many": "{n} notas",
-  "no_steel": "sin demanda · sin armadura"
+  "no_steel": "sin demanda · sin armadura",
+  "list_cannot": "No se pudo armar el Excel."
  },
  "en": {
   "calc": "Calculators",
@@ -180,7 +181,7 @@
   "list_dl_done": "Excel downloaded",
   "list_title": "Your walls",
   "list_empty": "Save this wall and go on to the next: at the end you download them all in one Excel that mento's ShearWallSummary opens",
-  "list_hint": "The Excel follows the <a href=\"https://mento-docs.readthedocs.io/en/latest/user_guide/shear_wall_summary.html\">ShearWallSummary</a> format: one row per combination, with the horizontal and the vertical mesh, all on one level.",
+  "list_hint": "The Excel has the two sheets <a href=\"https://mento-docs.readthedocs.io/en/latest/user_guide/shear_wall_summary.html\">ShearWallSummary</a> reads: Sections, a row per wall with its horizontal and vertical mesh, and Forces, a row per combination.",
   "file_name_list": "walls",
   "passes": "Passes",
   "passes_limit": "Passes · at the limit",
@@ -265,6 +266,7 @@
   "notice_info": "Note.",
   "note_one": "1 note",
   "note_many": "{n} notes",
-  "no_steel": "no demand · no reinforcement"
+  "no_steel": "no demand · no reinforcement",
+  "list_cannot": "The Excel could not be built."
  }
 }

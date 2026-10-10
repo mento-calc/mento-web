@@ -458,58 +458,100 @@ def saved(**changes):
     return {**data, "layouts": result["layouts"]}
 
 
-def sheet(beams):
+US_BEAM = {key: value for key, value in beam.EXAMPLE_US.items() if key != "lang"}
+
+
+def excel(beams, lang="es"):
+    """The file the list downloads, as bytes mento or pandas can open."""
+    file = json.loads(beam.summary(json.dumps({"lang": lang, "beams": beams})))
+    assert file["ok"], file
+    assert file["name"] == "beams.xlsx"
+    return io.BytesIO(base64.b64decode(file["base64"]))
+
+
+def sheets(beams):
     import pandas as pd
 
-    (file,) = json.loads(beam.summary(json.dumps({"lang": "es", "beams": beams})))
-    return pd.read_excel(io.BytesIO(base64.b64decode(file["base64"])), sheet_name="Beams")
+    return pd.read_excel(excel(beams), sheet_name=None)
 
 
-def test_the_excel_has_mentos_columns_and_a_row_for_every_combination():
-    frame = sheet([saved(), saved(label="V-102", height=50)])
-    assert list(frame.columns) == beam.SUMMARY_COLUMNS
-    assert frame.iloc[0].tolist()[2:8] == ["cm", "cm", "mm", "kN", "kN", "kNm"]
-    assert frame["Label"].tolist()[1:] == ["V-101"] * 3 + ["V-102"] * 3
-    assert frame["Comb."].tolist()[1:4] == ["1.4D", "1.2D+1.6L", "0.9D+1.0E"]
+def test_the_excel_is_the_two_sheets_beam_summary_reads():
+    """A row per beam in Sections and a row per combination in Forces, each under its row of units."""
+    book = sheets([saved(), saved(label="V-102", height=50)])
+    assert list(book) == ["Sections", "Forces"]
+    sections, forces = book["Sections"], book["Forces"]
+    assert sections["Label"].tolist()[1:] == ["V-101", "V-102"]
+    assert sections[["b", "h", "cc"]].iloc[0].tolist() == ["cm", "cm", "mm"]
+    assert sections["h"].tolist()[1:] == [60, 50]
+    assert forces["Label"].tolist()[1:] == ["V-101"] * 3 + ["V-102"] * 3
+    assert forces["Comb."].tolist()[1:4] == ["1.4D", "1.2D+1.6L", "0.9D+1.0E"]
+    assert forces[["Nx", "Vz", "My"]].iloc[0].tolist() == ["kN", "kN", "kNm"]
+    assert forces["My"].tolist()[1:4] == [55, 92, -45]
 
 
-def test_each_row_carries_the_face_its_moment_pulls_and_the_stirrups_of_the_beam():
+def test_a_section_carries_both_faces_and_its_stirrups_by_their_legs():
     data = saved()
     layouts = data["layouts"]
-    frame = sheet([data]).iloc[1:].reset_index(drop=True)
-    for _, row in frame.iterrows():
-        face = layouts["bot" if row["My"] >= 0 else "top"]
-        assert [row[f"n{i}"] for i in range(1, 5)] == [face.get(f"n{i}", 0) for i in range(1, 5)]
-        assert [row[f"db{i}"] for i in range(1, 5)] == [face.get(f"d{i}", 0) for i in range(1, 5)]
-        assert [row["ns"], row["dbs"], row["sl"]] == [layouts["st"]["n"], layouts["st"]["d"], layouts["st"]["s"]]
-    assert frame["My"].tolist() == [55, 92, -45]
+    row = sheets([data])["Sections"].iloc[1]
+    for face in ("bot", "top"):
+        for index in (1, 2, 3, 4):
+            assert row[f"n{index}_{face}"] == layouts[face].get(f"n{index}", 0), (face, index)
+            assert row[f"db{index}_{face}"] == layouts[face].get(f"d{index}", 0), (face, index)
+    stirrups = layouts["st"]
+    assert [row["legs"], row["dbs"], row["sl"]] == [stirrups["n"], stirrups["d"], stirrups["s"]] == [2, 6, 28]
+
+
+def test_mento_reads_the_excel_and_checks_what_the_page_checked():
+    """What the page hands over is what it calculated: BeamSummary reads the file back and gives each
+    beam the DCRs of the page's verdict, in metric and in US units."""
+    from mento import BeamSummary
+
+    for data in (saved(), saved(**US_BEAM)):
+        page = {row["key"]: row["dcr"] for row in json.loads(beam.run(json.dumps(data)))["ledger"]}
+        concrete, steel = common.materials(data)
+        summary = BeamSummary.from_excel(concrete, steel, excel([data]))
+        summary.check()
+        (verdict,) = summary.results
+        assert verdict.passes
+        got = {"flexure_bottom": verdict.bottom.DCR, "flexure_top": verdict.top.DCR, "shear": verdict.shear.DCR}
+        assert {key: round(value, 3) for key, value in got.items()} == page
+
+
+def test_a_us_list_is_written_in_inches_and_kip():
+    book = sheets([saved(**US_BEAM)])
+    sections, forces = book["Sections"], book["Forces"]
+    assert sections[["b", "h", "cc", "dbs", "sl", "db1_bot"]].iloc[0].tolist() == ["in"] * 6
+    assert forces[["Nx", "Vz", "My"]].iloc[0].tolist() == ["kip", "kip", "kip·ft"]
+    assert sections["db1_bot"].iloc[1] == 0.75 and sections["dbs"].iloc[1] == 0.375  # a #6 and a #3
+    assert forces["My"].iloc[1] == 45
+
+
+def test_a_beam_with_no_top_bars_and_three_legs_is_written_as_it_is():
+    rebar = {"bot": {"n1": 3, "d1": 16}, "top": {}, "stirrups": {"n": 3, "d": 8, "s": 15}}
+    data = saved(mode="check", width=30, rebar=rebar, forces=[{"label": "U", "M_y": 120, "V_z": 150}])
+    row = sheets([data])["Sections"].iloc[1]
+    assert [row["n1_top"], row["db1_top"], row["n1_bot"], row["db1_bot"], row["legs"]] == [0, 0, 3, 16, 3]
+
+
+def failed(beams):
+    return json.loads(beam.summary(json.dumps({"lang": "es", "beams": beams})))
 
 
 def test_beams_of_other_materials_do_not_share_an_excel():
-    with pytest.raises(common.InputError) as error:
-        sheet([saved(), saved(label="V-102", fc=30)])
-    assert error.value.field == "list"
-    with pytest.raises(common.InputError):
-        sheet([saved(), saved(label="V-102", code="ACI 318-19")])
-    with pytest.raises(common.InputError):
-        sheet([])
+    assert failed([saved(), saved(label="V-102", fc=30)]) == {
+        "ok": False,
+        "kind": "input",
+        "field": "list",
+        "message": "materials",
+    }
+    assert failed([saved(), saved(label="V-102", code="ACI 318-19")])["field"] == "list"
+    assert failed([saved(), saved(**{**US_BEAM, "label": "V-102"})])["message"] == "units"
+    assert failed([])["message"] == "empty"
 
 
-def test_a_us_list_writes_inches_and_the_bar_diameters():
-    data = saved(**{k: v for k, v in beam.EXAMPLE_US.items() if k != "lang"})
-    frame = sheet([data])
-    assert frame.iloc[0].tolist()[2:8] == ["in", "in", "in", "kip", "kip", "kip·ft"]
-    first = frame.iloc[1]
-    assert first["My"] == 45
-    assert first["db1"] == data["layouts"]["bot"]["d1"] * 0.125  # an ASTM size is eighths of an inch: #6 is 0.75 in
-    assert first["dbs"] == data["layouts"]["st"]["d"] * 0.125
-
-
-def test_mento_reads_the_excel_and_checks_every_row():
-    """What the page hands over is a BeamSummary input: it builds, and every row passes."""
-    from mento import BeamSummary
-
-    for data in (saved(), saved(**{k: v for k, v in beam.EXAMPLE_US.items() if k != "lang"})):
-        concrete, steel = common.materials(data)
-        checked = BeamSummary(concrete=concrete, steel_bar=steel, beam_list=sheet([data])).check()
-        assert checked["¿Ok?"].tolist()[1:] == ["✅"] * len(data["forces"])
+def test_what_a_summary_cannot_hold_comes_back_in_mentos_words():
+    """Two combinations of a beam under one name: mento refuses the table and says which, in Spanish."""
+    forces = [{"label": "U", "M_y": 60, "V_z": 20}, {"label": "U", "M_y": 70, "V_z": 20}]
+    result = failed([saved(forces=forces)])
+    assert not result["ok"] and result["kind"] == "summary"
+    assert "'U'" in result["message"] and "'V-101'" in result["message"] and "combinación" in result["message"]

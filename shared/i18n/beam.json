@@ -59,7 +59,7 @@
   "list_dl_done": "Excel descargado",
   "list_title": "Tus vigas",
   "list_empty": "Guardá esta viga y seguí con la próxima: al final descargás todas en un Excel que abre el BeamSummary de mento",
-  "list_hint": "El Excel sigue el formato de <a href=\"https://mento-docs.readthedocs.io/en/latest/user_guide/beam_summary.html\">BeamSummary</a>: una fila por combinación, con las barras de la cara que tracciona su momento.",
+  "list_hint": "El Excel trae las dos hojas que lee <a href=\"https://mento-docs.readthedocs.io/en/latest/user_guide/beam_summary.html\">BeamSummary</a>: Sections, una fila por viga con sus estribos y la armadura de las dos caras, y Forces, una fila por combinación.",
   "file_name_list": "vigas",
   "passes": "Cumple",
   "passes_limit": "Cumple · al límite",
@@ -164,7 +164,8 @@
   "at_top": "arriba",
   "at_bot": "abajo",
   "mounting_why": "sostiene los estribos",
-  "steel_ratio": "Cuantía"
+  "steel_ratio": "Cuantía",
+  "list_cannot": "No se pudo armar el Excel."
  },
  "en": {
   "page_title": "mento · Rectangular reinforced concrete beam",
@@ -226,7 +227,7 @@
   "list_dl_done": "Excel downloaded",
   "list_title": "Your beams",
   "list_empty": "Save this beam and go on to the next: at the end you download them all in one Excel that mento's BeamSummary opens",
-  "list_hint": "The Excel follows the <a href=\"https://mento-docs.readthedocs.io/en/latest/user_guide/beam_summary.html\">BeamSummary</a> format: one row per combination, with the bars of the face its moment pulls.",
+  "list_hint": "The Excel has the two sheets <a href=\"https://mento-docs.readthedocs.io/en/latest/user_guide/beam_summary.html\">BeamSummary</a> reads: Sections, a row per beam with its stirrups and the bars of both faces, and Forces, a row per combination.",
   "file_name_list": "beams",
   "passes": "Passes",
   "passes_limit": "Passes · at the limit",
@@ -331,6 +332,7 @@
   "at_top": "top",
   "at_bot": "bottom",
   "mounting_why": "holds the stirrups",
-  "steel_ratio": "Steel"
+  "steel_ratio": "Steel",
+  "list_cannot": "The Excel could not be built."
  }
 }
