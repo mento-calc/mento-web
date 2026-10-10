@@ -114,6 +114,7 @@ const barsFromLayouts = (layouts) => ({
 
 start({
   module: "wall",
+  collection: { key: "walls", fallback: "W1", size: (p, U) => `${fmt(p.thickness)} ${U.len} × ${fmt(p.length)} ${U.span}` },
   example: EXAMPLE,
   exampleUS: EXAMPLE_US,
   numbers: [

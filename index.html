@@ -54,22 +54,23 @@
     <div class="facts"><span class="fact"><i><svg width="9" height="9" aria-hidden="true"><use href="#i-check"/></svg></i><span data-i18n="f_free">Gratis</span></span><span class="fact"><i><svg width="9" height="9" aria-hidden="true"><use href="#i-check"/></svg></i><span data-i18n="f_test">Testeado contra ejemplos publicados</span></span><span class="fact"><i><svg width="9" height="9" aria-hidden="true"><use href="#i-check"/></svg></i><span data-i18n="f_noreg">Sin registro</span></span><span class="fact"><i><svg width="9" height="9" aria-hidden="true"><use href="#i-check"/></svg></i><span data-i18n="f_lang">Español e inglés, SI y US</span></span></div>
   </div>
   <!-- The worked example of beam/ (py/beam.py EXAMPLE); py/test_site.py keeps these numbers in step with mento.
-       Each option carries its signature and its middle bottom bars (x,y,d in cm); home.js swaps them in. -->
-  <div class="viz" id="hero" data-top="2x12+1x10" data-st="1x6@28">
+       As many options as mento proposes for the bottom face, each with its signature and its middle
+       bottom bars (x,y,d in cm); home.js swaps them in. The two bars at mid-height are the skin. -->
+  <div class="viz" id="hero" data-top="2x12+1x10" data-st="2x6@28">
     <div class="viz-draw"><span class="eyebrow" data-i18n="drawing">Sección · a escala</span><svg width="272" height="307" viewBox="0 0 310 350" role="img" data-i18n-aria="fig_beam" aria-label="Sección 20 × 60 con su armadura">
-        <g transform="translate(70,10)"><rect class="dw-concrete" x="0" y="0" width="100" height="300"/>
-        <rect class="dw-stirrup" x="12.5" y="12.5" width="75" height="275" rx="5" style="stroke-width:3"/>
-        <circle class="dw-bar" cx="19" cy="281" r="4"/><circle class="dw-bar" cx="81" cy="281" r="4"/><circle class="dw-bar" data-mid cx="50" cy="281.5" r="3"/><circle class="dw-bar" cx="18.5" cy="18.5" r="3"/><circle class="dw-bar" cx="81.5" cy="18.5" r="3"/><circle class="dw-bar" cx="50" cy="18" r="2.5"/>
-        <line x1="84" y1="18.5" x2="130" y2="18.5" stroke="#5b6470" stroke-width=".8"/><text class="dw-label" x="134" y="22" font-size="14" data-hero="top">2Ø12+1Ø10</text>
-        <line x1="88" y1="150" x2="130" y2="150" stroke="#5b6470" stroke-width=".8"/><text class="dw-label dw-label--stirrup" x="134" y="154" font-size="14" data-hero="stirrups">1eØ6/28cm</text>
-        <line x1="84" y1="281" x2="130" y2="281" stroke="#5b6470" stroke-width=".8"/><text class="dw-label" x="134" y="285" font-size="14" data-hero="bottom">2Ø16+1Ø12</text>
+        <g transform="translate(56,10)"><rect class="dw-concrete" x="0" y="0" width="100" height="300"/>
+        <rect class="dw-stirrup" x="14" y="14" width="72" height="272" rx="7.5" style="stroke-width:3"/>
+        <circle class="dw-bar" cx="20.1" cy="279.9" r="4"/><circle class="dw-bar" cx="79.9" cy="279.9" r="4"/><circle class="dw-bar" data-mid cx="50" cy="281.5" r="3"/><circle class="dw-bar" cx="19.4" cy="19.4" r="3"/><circle class="dw-bar" cx="50" cy="18" r="2.5"/><circle class="dw-bar" cx="80.6" cy="19.4" r="3"/><circle class="dw-bar" cx="17.5" cy="149.5" r="2.5"/><circle class="dw-bar" cx="82.5" cy="149.5" r="2.5"/>
+        <line x1="84" y1="18.9" x2="116" y2="18.9" stroke="#5b6470" stroke-width=".8"/><text class="dw-label" x="120" y="22.4" font-size="14" data-hero="top">2Ø12+1Ø10</text>
+        <line x1="89" y1="112" x2="116" y2="112" stroke="#5b6470" stroke-width=".8"/><text class="dw-label dw-label--stirrup" x="120" y="115.5" font-size="14" data-hero="stirrups">1eØ6/28cm</text>
+        <line x1="87" y1="149.5" x2="116" y2="149.5" stroke="#5b6470" stroke-width=".8"/><text class="dw-label" x="120" y="153" font-size="14"><tspan data-hero="skin">1Ø8</tspan> <tspan data-i18n="per_side">por cara</tspan></text>
+        <line x1="84" y1="280.2" x2="116" y2="280.2" stroke="#5b6470" stroke-width=".8"/><text class="dw-label" x="120" y="283.7" font-size="14" data-hero="bottom">2Ø16+1Ø12</text>
         <path class="dw-dl" d="M0 304V318M100 304V318M-4 314H104M-3 317L3 311M97 317L103 311"/><text class="dw-dt" x="50" y="330" text-anchor="middle" data-hero="width">20 cm</text>
         <path class="dw-dl" d="M-4 0H-18M-4 300H-18M-14 -4V304M-17 3L-11 -3M-17 303L-11 297"/><text class="dw-dt" x="-21" y="150" text-anchor="middle" transform="rotate(-90 -21 150)" data-hero="height">60 cm</text></g></svg></div>
     <div class="viz-prop" role="radiogroup" aria-labelledby="hero-propose">
       <div class="hd"><span class="eyebrow" id="hero-propose" data-i18n="propose_s">mento propone</span><span class="grp-name" data-i18n="bot_l">inferior</span></div>
       <label class="opt" data-sig="2x16+1x12" data-mid="10,3.7,1.2"><input type="radio" name="hero-bot" checked><span class="val" data-hero="opt1">2Ø16+1Ø12</span><span class="area">5.15 cm²</span><span class="dcr ok" data-hero="opt1_dcr">0.88</span></label>
       <label class="opt" data-sig="2x16+1x16" data-mid="10,3.9,1.6"><input type="radio" name="hero-bot"><span class="val" data-hero="opt2">3Ø16</span><span class="area">6.03 cm²</span><span class="dcr ok" data-hero="opt2_dcr">0.76</span></label>
-      <label class="opt" data-sig="2x16+2x12" data-mid="7.9,3.7,1.2;12.1,3.7,1.2"><input type="radio" name="hero-bot"><span class="val" data-hero="opt3">2Ø16+2Ø12</span><span class="area">6.28 cm²</span><span class="dcr ok" data-hero="opt3_dcr">0.73</span></label>
       <a class="more" id="hero-check" href="beam/" data-i18n="ortry">o cargá la tuya y verificala →</a>
     </div>
     <div class="viz-verdict">
@@ -79,15 +80,16 @@
     </div>
   </div>
   <!-- The same hero in US units: beam/'s US example (py/beam.py EXAMPLE_US), which home.js draws in its
-       place when the page is in English. Lengths in inches; each option's "low" is all its bottom
-       bars (x,y,d), since in US sizes an option changes the corner bars too. py/test_site.py checks it. -->
-  <script type="application/json" id="hero-us">{"width":12.0,"height":24.0,"cover":1.5,"stirrup":0.375,"bars":[[2.411,2.411,0.75],[9.589,2.411,0.75],[2.349,21.651,0.625],[9.651,21.651,0.625],[6.0,21.875,0.5]],"top":"2#5+1#4","stirrups":"#3@10in","data_top":"2x5+1x4","data_st":"1x3@10","options":[{"sig":"2x6","low":"2.411,2.411,0.75;9.589,2.411,0.75","bars":"2#6","area":"0.88 in²","dcr":"0.86"},{"sig":"2x5+1x5","low":"2.349,2.349,0.625;9.651,2.349,0.625;6,2.188,0.625","bars":"3#5","area":"0.92 in²","dcr":"0.82"},{"sig":"2x5+2x4","low":"2.349,2.349,0.625;9.651,2.349,0.625;4.708,2.125,0.5;7.292,2.125,0.5","bars":"2#5+2#4","area":"1.01 in²","dcr":"0.75"}],"top_dcr":"0.75","shear_dcr":"0.65"}</script>
+       place when the page is in English. Lengths in inches, the stirrup by its centreline; each option's
+       "low" is all its bottom bars (x,y,d), since in US sizes an option changes the corner bars too.
+       py/test_site.py checks it. -->
+  <script type="application/json" id="hero-us">{"width":12.0,"height":24.0,"stirrup":{"d":0.375,"bend":1.5},"closed":{"x0":1.688,"x1":10.312,"y0":1.688,"y1":22.312},"bars":[[2.36,2.36,0.75],[9.64,2.36,0.75],[2.316,21.684,0.625],[6.0,21.875,0.5],[9.684,21.684,0.625]],"skin_bars":[[2.062,12.031,0.375],[9.938,12.031,0.375]],"top":"2#5+1#4","stirrups":"1s#3@10in","skin":"1#3","data_top":"2x5+1x4","data_st":"2x3@10","options":[{"sig":"2x6","low":"2.36,2.36,0.75;9.64,2.36,0.75","bars":"2#6","area":"0.88 in²","dcr":"0.86"},{"sig":"2x5+1x5","low":"2.316,2.316,0.625;6,2.188,0.625;9.684,2.316,0.625","bars":"3#5","area":"0.92 in²","dcr":"0.82"},{"sig":"2x5+2x4","low":"2.316,2.316,0.625;4.793,2.125,0.5;7.207,2.125,0.5;9.684,2.316,0.625","bars":"2#5+2#4","area":"1.01 in²","dcr":"0.75"}],"top_dcr":"0.75","shear_dcr":"0.65"}</script>
 </section>
 
 <section class="steps-band"><div class="eyebrow" data-i18n="how">Cómo funciona</div>
   <div class="steps-row">
     <div class="step"><span class="n">1</span><span class="t" data-i18n="s1t">Cargá la sección y los esfuerzos</span><span class="d" data-i18n="s1d">Norma, materiales, b × h y las combinaciones con M, V y N. Arranca con un ejemplo resuelto: cambiás lo tuyo y listo.</span></div>
-    <div class="step"><span class="n">2</span><span class="t" data-i18n="s2t">Elegí: que mento la diseñe, o verificá la tuya</span><span class="d" data-i18n="s2d">mento propone tres armados por grupo (inferior, superior, estribos) con su aprovechamiento. O cargás tus barras y las verificás.</span></div>
+    <div class="step"><span class="n">2</span><span class="t" data-i18n="s2t">Elegí: que mento la diseñe, o verificá la tuya</span><span class="d" data-i18n="s2d">mento propone hasta tres armados por grupo (inferior, superior, estribos) con su aprovechamiento. O cargás tus barras y las verificás.</span></div>
     <div class="step"><span class="n">3</span><span class="t" data-i18n="s3t">Leé la verificación de un vistazo</span><span class="d" data-i18n="s3d">Cumple / no cumple por flexión y corte, con la combinación que gobierna, la tabla completa por combinación y el cálculo detallado.</span></div>
     <div class="step"><span class="n">4</span><span class="t" data-i18n="s4t">Llevátelo</span><span class="d" data-i18n="s4d">Memoria en Word para tu informe y un link que guarda el diseño completo para compartirlo o retomarlo.</span></div>
   </div></section>
@@ -95,13 +97,14 @@
 <section class="calcs" id="calcs">
   <div class="head"><h2 class="t-h2" data-i18n="calc">Calculadoras</h2><span class="sub" data-i18n="calcsub">cada una con las tres normas adentro</span></div>
   <div class="cgrid cgrid--home">
-    <a class="ccard ccard--featured" href="beam/"><div class="body"><div class="name" data-i18n="beam">Viga rectangular</div><div class="desc" data-i18n="c1">Flexión y corte con hasta 10 combinaciones, momento positivo y negativo, axil en corte. Diseño de armadura con tres opciones por grupo, o verificación de la tuya.</div><div class="codes">ACI 318-19 · CIRSOC 201-25 · EN 1992</div><div class="foot"><span class="tag" data-i18n="live">● Disponible</span><span class="go" data-i18n="open">Abrir →</span></div></div><div class="fig"><svg width="214" height="242" viewBox="0 0 310 350" role="img" data-i18n-aria="fig_beam" aria-label="Sección 20 × 60 con su armadura">
-        <g transform="translate(70,10)"><rect class="dw-concrete" x="0" y="0" width="100" height="300"/>
-        <rect class="dw-stirrup" x="12.5" y="12.5" width="75" height="275" rx="5" style="stroke-width:3"/>
-        <circle class="dw-bar" cx="19" cy="281" r="4"/><circle class="dw-bar" cx="81" cy="281" r="4"/><circle class="dw-bar" cx="50" cy="282" r="3"/><circle class="dw-bar" cx="18.5" cy="18.5" r="3"/><circle class="dw-bar" cx="81.5" cy="18.5" r="3"/><circle class="dw-bar" cx="50" cy="18" r="2.5"/>
-        <line x1="84" y1="18.5" x2="130" y2="18.5" stroke="#5b6470" stroke-width=".8"/><text class="dw-label" x="134" y="22" font-size="14">2Ø12+1Ø10</text>
-        <line x1="88" y1="150" x2="130" y2="150" stroke="#5b6470" stroke-width=".8"/><text class="dw-label dw-label--stirrup" x="134" y="154" font-size="14">1eØ6/28cm</text>
-        <line x1="84" y1="281" x2="130" y2="281" stroke="#5b6470" stroke-width=".8"/><text class="dw-label" x="134" y="285" font-size="14">2Ø16+1Ø12</text>
+    <a class="ccard ccard--featured" href="beam/"><div class="body"><div class="name" data-i18n="beam">Viga rectangular</div><div class="desc" data-i18n="c1">Flexión y corte con hasta 10 combinaciones, momento positivo y negativo, axil en corte. Diseño de armadura con hasta tres opciones por grupo, o verificación de la tuya.</div><div class="codes">ACI 318-19 · CIRSOC 201-25 · EN 1992</div><div class="foot"><span class="tag" data-i18n="live">● Disponible</span><span class="go" data-i18n="open">Abrir →</span></div></div><div class="fig"><svg width="214" height="242" viewBox="0 0 310 350" role="img" data-i18n-aria="fig_beam" aria-label="Sección 20 × 60 con su armadura">
+        <g transform="translate(56,10)"><rect class="dw-concrete" x="0" y="0" width="100" height="300"/>
+        <rect class="dw-stirrup" x="14" y="14" width="72" height="272" rx="7.5" style="stroke-width:3"/>
+        <circle class="dw-bar" cx="20.1" cy="279.9" r="4"/><circle class="dw-bar" cx="79.9" cy="279.9" r="4"/><circle class="dw-bar" cx="50" cy="281.5" r="3"/><circle class="dw-bar" cx="19.4" cy="19.4" r="3"/><circle class="dw-bar" cx="50" cy="18" r="2.5"/><circle class="dw-bar" cx="80.6" cy="19.4" r="3"/><circle class="dw-bar" cx="17.5" cy="149.5" r="2.5"/><circle class="dw-bar" cx="82.5" cy="149.5" r="2.5"/>
+        <line x1="84" y1="18.9" x2="116" y2="18.9" stroke="#5b6470" stroke-width=".8"/><text class="dw-label" x="120" y="22.4" font-size="14">2Ø12+1Ø10</text>
+        <line x1="89" y1="112" x2="116" y2="112" stroke="#5b6470" stroke-width=".8"/><text class="dw-label dw-label--stirrup" x="120" y="115.5" font-size="14">1eØ6/28cm</text>
+        <line x1="87" y1="149.5" x2="116" y2="149.5" stroke="#5b6470" stroke-width=".8"/><text class="dw-label" x="120" y="153" font-size="14"><tspan>1Ø8</tspan> <tspan data-i18n="per_side">por cara</tspan></text>
+        <line x1="84" y1="280.2" x2="116" y2="280.2" stroke="#5b6470" stroke-width=".8"/><text class="dw-label" x="120" y="283.7" font-size="14">2Ø16+1Ø12</text>
         <path class="dw-dl" d="M0 304V318M100 304V318M-4 314H104M-3 317L3 311M97 317L103 311"/><text class="dw-dt" x="50" y="330" text-anchor="middle">20 cm</text>
         <path class="dw-dl" d="M-4 0H-18M-4 300H-18M-14 -4V304M-17 3L-11 -3M-17 303L-11 297"/><text class="dw-dt" x="-21" y="150" text-anchor="middle" transform="rotate(-90 -21 150)">60 cm</text></g></svg></div></a>
     <a class="ccard" href="slab/"><div class="head"><span class="fig"><svg viewBox="0 0 240 78" role="img" data-i18n-aria="fig_slab" aria-label="Franja de losa con su armadura">
@@ -121,7 +124,7 @@
 </section>
 
 <section class="band" id="trust"><div class="band-grid">
-  <div><div class="big" id="tests" hidden></div><div class="lead-t" id="tests-t" data-i18n="tests_none">Testeado contra ejemplos publicados</div><div class="lead-d" data-i18n="tests_d">Cada rutina se compara con ejemplos resueltos de ACI 318, CIRSOC 201 y EN 1992, en cada cambio del código. Los tests son públicos.</div><a href="https://github.com/mihdicaballero/mento/tree/main/tests" style="font-size:13.5px;text-decoration:none" data-i18n="seetests">Verlos →</a></div>
+  <div><div class="big" id="tests" hidden></div><div class="lead-t" id="tests-t" data-i18n="tests_none">Testeado contra ejemplos publicados</div><div class="lead-d" data-i18n="tests_d">Cada rutina se compara con ejemplos resueltos de ACI 318, CIRSOC 201 y EN 1992, en cada cambio del código. Los tests son públicos.</div><a href="https://github.com/mento-calc/mento/tree/main/tests" style="font-size:13.5px;text-decoration:none" data-i18n="seetests">Verlos →</a></div>
   <div><div class="eyebrow" data-i18n="v_eye">Cómo entra un cálculo a mento</div>
     <ol class="vsteps">
       <li><span class="n">1</span><div><b data-i18n="v1t">Una referencia reconocida</b><span data-i18n="v1d">Un ejemplo de la norma, de una guía oficial o de un libro reconocido, o el resultado de un software validado en la industria.</span></div></li>
@@ -131,7 +134,7 @@
   </div>
   <ul class="proof">
     <li><a href="https://pypi.org/project/mento/"><b data-i18n="pr1t">+1.000 descargas por mes</b><span data-i18n="pr1d">en PyPI, el índice de paquetes de Python</span></a></li>
-    <li><a href="https://github.com/mihdicaballero/mento"><b data-i18n="pr2t">Código abierto</b><span data-i18n="pr2d">licencia MIT, cada línea a la vista</span></a></li>
+    <li><a href="https://github.com/mento-calc/mento"><b data-i18n="pr2t">Código abierto</b><span data-i18n="pr2d">licencia MIT, cada línea a la vista</span></a></li>
     <li><a href="https://doi.org/10.5281/zenodo.21956634"><b data-i18n="pr3t">Citable</b><span data-i18n="pr3d">con DOI en Zenodo, para tu tesis o tu informe</span></a></li>
     <li><a href="https://mento-docs.readthedocs.io/en/latest/theory/index.html"><b data-i18n="pr4t">La teoría escrita</b><span data-i18n="pr4d">cada norma explicada en la documentación</span></a></li>
     <li><div><b data-i18n="pr5t">CIRSOC 201-25</b><span data-i18n="pr5d">el único paquete abierto que la implementa, hasta donde sabemos</span></div></li>
@@ -157,14 +160,13 @@
   <!-- BeamSummary on the example of mento's user guide (four beams, ACI 318-19); py/test_site.py keeps these numbers in step with mento. -->
   <div class="pycode">
     <div class="pycode-hd"><span class="eyebrow" data-i18n="py_nbk">Notebook · vigas del proyecto</span><code>pip install mento</code></div>
-    <pre class="codeblock" translate="no" tabindex="0" role="region" data-i18n-aria="py_code" aria-label="Código de ejemplo con BeamSummary"><span class="kw">import</span> pandas <span class="kw">as</span> pd
-<span class="kw">from</span> mento <span class="kw">import</span> BeamSummary, Concrete_ACI_318_19, SteelBar, MPa
+    <pre class="codeblock" translate="no" tabindex="0" role="region" data-i18n-aria="py_code" aria-label="Código de ejemplo con BeamSummary"><span class="kw">from</span> mento <span class="kw">import</span> BeamSummary, Concrete_ACI_318_19, SteelBar, MPa
 
 conc = Concrete_ACI_318_19(name=<span class="str">"H-25"</span>, f_c=25 * MPa)
 steel = SteelBar(name=<span class="str">"ADN 420"</span>, f_y=420 * MPa)
-beams = pd.read_excel(<span class="str">"project.xlsx"</span>, sheet_name=<span class="str">"Beams"</span>)
 
-summary = BeamSummary(conc, steel, beams)
+<span class="cm" data-i18n="py_c0"># un Excel con dos hojas: Sections (las vigas) y Forces (sus esfuerzos)</span>
+summary = BeamSummary.from_excel(conc, steel, <span class="str">"project.xlsx"</span>)
 summary.check()                       <span class="cm" data-i18n="py_c1"># tu armado, viga por viga</span>
 summary.design()                      <span class="cm" data-i18n="py_c2"># el armado de todas</span>
 summary.export_design(<span class="str">"design.xlsx"</span>)  <span class="cm" data-i18n="py_c3"># de vuelta a Excel</span>
@@ -175,8 +177,8 @@ summary.results_detailed_doc()        <span class="cm" data-i18n="py_c4"># la me
         <tbody>
           <tr><td>V101</td><td class="dcr ok"><span data-sum="V101 check">0.59</span><svg class="mk" width="11" height="11" role="img" data-i18n-aria="passes" aria-label="Cumple"><use href="#i-check"/></svg></td><td class="dcr ok"><span data-sum="V101 design">0.12</span><svg class="mk" width="11" height="11" role="img" data-i18n-aria="passes" aria-label="Cumple"><use href="#i-check"/></svg></td></tr>
           <tr><td>V102</td><td class="dcr ok"><span data-sum="V102 check">0.50</span><svg class="mk" width="11" height="11" role="img" data-i18n-aria="passes" aria-label="Cumple"><use href="#i-check"/></svg></td><td class="dcr ok"><span data-sum="V102 design">0.68</span><svg class="mk" width="11" height="11" role="img" data-i18n-aria="passes" aria-label="Cumple"><use href="#i-check"/></svg></td></tr>
-          <tr><td>V103</td><td class="dcr bad"><span data-sum="V103 check">1.05</span><svg class="mk" width="11" height="11" role="img" data-i18n-aria="fails" aria-label="No cumple"><use href="#i-cross"/></svg></td><td class="dcr ok"><span data-sum="V103 design">0.76</span><svg class="mk" width="11" height="11" role="img" data-i18n-aria="passes" aria-label="Cumple"><use href="#i-check"/></svg></td></tr>
-          <tr><td>V104</td><td class="dcr bad"><span data-sum="V104 check">1.17</span><svg class="mk" width="11" height="11" role="img" data-i18n-aria="fails" aria-label="No cumple"><use href="#i-cross"/></svg></td><td class="dcr ok"><span data-sum="V104 design">0.85</span><svg class="mk" width="11" height="11" role="img" data-i18n-aria="passes" aria-label="Cumple"><use href="#i-check"/></svg></td></tr>
+          <tr><td>V103</td><td class="dcr ok"><span data-sum="V103 check">0.61</span><svg class="mk" width="11" height="11" role="img" data-i18n-aria="passes" aria-label="Cumple"><use href="#i-check"/></svg></td><td class="dcr ok"><span data-sum="V103 design">0.76</span><svg class="mk" width="11" height="11" role="img" data-i18n-aria="passes" aria-label="Cumple"><use href="#i-check"/></svg></td></tr>
+          <tr><td>V104</td><td class="dcr bad"><span data-sum="V104 check">1.18</span><svg class="mk" width="11" height="11" role="img" data-i18n-aria="fails" aria-label="No cumple"><use href="#i-cross"/></svg></td><td class="dcr ok"><span data-sum="V104 design">0.85</span><svg class="mk" width="11" height="11" role="img" data-i18n-aria="passes" aria-label="Cumple"><use href="#i-check"/></svg></td></tr>
         </tbody>
       </table>
       <p class="hint" data-i18n="py_out">Aprovechamiento que gobierna cada viga. Son las cuatro del ejemplo de la documentación, calculadas con la misma versión de mento que corre esta web.</p>
@@ -212,8 +214,8 @@ summary.results_detailed_doc()        <span class="cm" data-i18n="py_c4"># la me
     <div class="donate"><a href="https://ko-fi.com/mentoapp" class="btn" data-i18n="kofi">Invitanos un café · Ko-fi</a><a href="https://cafecito.app/mentoapp" class="btn btn--sec" data-i18n="cafecito">Cafecito · Mercado Pago</a><a href="https://github.com/sponsors/mihdicaballero" class="btn btn--sec" data-i18n="sponsors">GitHub Sponsors</a></div>
     <p class="fine" data-i18n="fine">Ko-fi acepta PayPal y tarjeta en dólares o euros · Cafecito en pesos · Sponsors si ya usás GitHub.</p></div>
   <div class="also"><span class="eyebrow" data-i18n="also">También ayuda</span>
-    <div><b data-i18n="a1t">Verificá un resultado.</b> <span data-i18n="a1d">Compará con tu planilla o con un ejemplo de la norma y contanos si difiere. Cada caso confirmado entra a los tests.</span> <a href="https://github.com/mihdicaballero/mento/issues/new" style="text-decoration:none" data-i18n="a1l">Reportá una diferencia →</a></div>
-    <div><b data-i18n="a2t">Mirá qué viene.</b> <span data-i18n="a2d">Las calculadoras siguen al paquete, que mantenemos en nuestro tiempo libre. En el roadmap está lo próximo: sumá sugerencias o ayudá a resolver un issue.</span> <a href="https://github.com/mihdicaballero/mento#roadmap" style="text-decoration:none" data-i18n="a2l">Ver el roadmap →</a></div>
+    <div><b data-i18n="a1t">Verificá un resultado.</b> <span data-i18n="a1d">Compará con tu planilla o con un ejemplo de la norma y contanos si difiere. Cada caso confirmado entra a los tests.</span> <a href="https://github.com/mento-calc/mento/issues/new" style="text-decoration:none" data-i18n="a1l">Reportá una diferencia →</a></div>
+    <div><b data-i18n="a2t">Mirá qué viene.</b> <span data-i18n="a2d">Las calculadoras siguen al paquete, que mantenemos en nuestro tiempo libre. En el roadmap está lo próximo: sumá sugerencias o ayudá a resolver un issue.</span> <a href="https://github.com/mento-calc/mento#roadmap" style="text-decoration:none" data-i18n="a2l">Ver el roadmap →</a></div>
     <div><b data-i18n="a3t">Compartilo.</b> <span data-i18n="a3d">Un link a un diseño tuyo le muestra a un colega exactamente lo que hace.</span></div></div>
 </section>
 
@@ -224,7 +226,7 @@ summary.results_detailed_doc()        <span class="cm" data-i18n="py_c4"># la me
     <div class="about"><span data-i18n="about">mento nació de las planillas y scripts que usamos todos los días en la oficina para calcular hormigón. Los pasamos a un paquete de Python para poder testearlos, y a esta web para diseñar rápido sin instalar nada.</span></div>
   </div></section>
 
-<footer class="foot"><span data-i18n="footer">Herramienta de apoyo. La verificación final es responsabilidad del profesional.</span><span class="spacer"></span><span>mento <span id="version">1.4.0</span> · <span data-i18n="oss">Código abierto</span> · <a href="#support" data-i18n="support">Apoyá el proyecto</a> · <a href="https://github.com/mihdicaballero/mento">GitHub</a> · <a href="https://mento-docs.readthedocs.io/en/latest/" data-i18n="docs">Docs</a> · <a href="https://github.com/mihdicaballero/mento/discussions" data-i18n="feedback">Contanos qué te pareció</a></span></footer>
+<footer class="foot"><span data-i18n="footer">Herramienta de apoyo. La verificación final es responsabilidad del profesional.</span><span class="spacer"></span><span>mento <span id="version">1.6.0</span> · <span data-i18n="oss">Código abierto</span> · <a href="#support" data-i18n="support">Apoyá el proyecto</a> · <a href="https://github.com/mento-calc/mento">GitHub</a> · <a href="https://mento-docs.readthedocs.io/en/latest/" data-i18n="docs">Docs</a> · <a href="https://github.com/mento-calc/mento/discussions" data-i18n="feedback">Contanos qué te pareció</a></span></footer>
 </main>
 </div>
 <script type="module" src="home.js"></script>

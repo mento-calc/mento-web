@@ -23,7 +23,7 @@ jobs:
           PAYLOAD_TESTS: ${{ github.event.client_payload.tests }}
         run: |
           if [ -z "$PAYLOAD_TESTS" ]; then
-            curl -fsSL https://github.com/mihdicaballero/mento/releases/latest/download/stats.json -o /tmp/stats.json
+            curl -fsSL https://github.com/mento-calc/mento/releases/latest/download/stats.json -o /tmp/stats.json
           else
             printf '{"tests": %s}' "$PAYLOAD_TESTS" > /tmp/stats.json
           fi

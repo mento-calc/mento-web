@@ -143,7 +143,14 @@ def test_home_names_the_mento_that_runs():
     worker = (ROOT / "shared" / "worker.js").read_text(encoding="utf-8")
     pinned = re.search(r'MENTO_VERSION = "([^"]+)"', worker).group(1)  # type: ignore[union-attr]
     assert f"mento=={pinned}" in (ROOT / "requirements-dev.txt").read_text(encoding="utf-8")
-    assert f'<span id="version">{pinned}</span>' in PAGES["home"].read_text(encoding="utf-8")
+    # every page, not only the home: a calculator shows a saved result only if that mento computed it
+    for page in PAGES.values():
+        assert f'<span id="version">{pinned}</span>' in page.read_text(encoding="utf-8"), page
+
+
+def _main(section: dict) -> list[dict]:
+    """The bars the checks count: not the mounting bars, nor the skin."""
+    return [bar for bar in section["bars"] if bar["kind"] == "main"]
 
 
 def test_hero_shows_the_worked_example():
@@ -155,7 +162,8 @@ def test_hero_shows_the_worked_example():
     bottom, top, shear = result["flexure"]["bottom"], result["flexure"]["top"], result["shear"]
     assert hero["bottom"] == hero["opt1"] == bottom["bars"]
     assert hero["top"] == top["bars"]
-    assert hero["stirrups"] == shear["stirrups"]
+    assert hero["stirrups"] == shear["stirrups"] == "1eØ6/28cm"  # one closed stirrup, as mento writes it
+    assert hero["skin"] == result["skin"]["bars"]  # 60 cm deep: mento lays skin out on each side face
     assert (hero["width"], hero["height"]) == (f"{beam.EXAMPLE['width']} cm", f"{beam.EXAMPLE['height']} cm")
     assert hero["bottom_dcr"] == hero["opt1_dcr"] == f"{bottom['DCR']:.2f}"
     assert hero["top_dcr"] == f"{top['DCR']:.2f}"
@@ -176,8 +184,8 @@ def test_hero_options_are_what_mento_proposes():
     options = re.findall(
         r'<label class="opt" data-sig="([^"]+)" data-mid="([^"]+)">.*?<span class="area">([^<]*)<', source
     )
-    assert len(options) == len(result["options"]["bot"]) == 3
-    for index, ((sig, mid, area), option) in enumerate(zip(options, result["options"]["bot"]), start=1):
+    assert len(options) == len(result["options"]["bot"]) >= 2  # as many as mento proposes, and a choice
+    for index, ((sig, mid, area), option) in enumerate(zip(options, result["options"]["bot"], strict=True), start=1):
         assert (sig, area) == (option["signature"], option["area"])
         assert hero[f"opt{index}"] == option["bars"] and hero[f"opt{index}_dcr"] == f"{option['dcr']:.2f}"
         picked = json.loads(beam.run(json.dumps({**beam.EXAMPLE, "choice": {"bot": sig}})))
@@ -190,7 +198,7 @@ def test_hero_options_are_what_mento_proposes():
         }
         # and it governs in every option, so the verdict moves with the pick
         assert max(row["dcr"] for row in picked["ledger"]) == picked["ledger"][0]["dcr"]
-        low = [bar for bar in picked["section"]["bars"] if bar["y"] < beam.EXAMPLE["height"] / 2]
+        low = [bar for bar in _main(picked["section"]) if bar["y"] < beam.EXAMPLE["height"] / 2]
         corners = {min(bar["x"] for bar in low), max(bar["x"] for bar in low)}
         between = [f"{bar['x']:g},{bar['y']:g},{bar['d']:g}" for bar in low if bar["x"] not in corners]
         assert mid.split(";") == between
@@ -202,9 +210,14 @@ def test_the_us_hero_is_the_us_example():
     data = json.loads(re.search(r'<script type="application/json" id="hero-us">(.*?)</script>', source, re.DOTALL)[1])
     result = json.loads(beam.run(json.dumps(beam.EXAMPLE_US)))
     section = result["section"]
-    assert (data["width"], data["height"], data["cover"]) == (section["width"], section["height"], section["cover"])
-    assert data["stirrup"] == section["stirrups"]["d"]
-    assert data["bars"] == [[bar["x"], bar["y"], bar["d"]] for bar in section["bars"]]
+    assert (data["width"], data["height"]) == (section["width"], section["height"])
+    assert data["stirrup"] == section["stirrup"] and [data["closed"]] == section["closed"]
+    assert data["bars"] == [[bar["x"], bar["y"], bar["d"]] for bar in _main(section)]
+    skin = [bar for bar in section["bars"] if bar["kind"] == "skin"]
+    assert (
+        data["skin_bars"] == [[bar["x"], bar["y"], bar["d"]] for bar in skin] and data["skin"] == result["skin"]["bars"]
+    )
+    assert len(section["bars"]) == len(data["bars"]) + len(data["skin_bars"])  # and no mounting bar to draw
     assert (data["top"], data["stirrups"]) == (result["rebar"]["top"], result["rebar"]["st"])
     assert (data["data_top"], data["data_st"]) == (
         signature(result["layouts"]["top"]),
@@ -212,7 +225,7 @@ def test_the_us_hero_is_the_us_example():
     )
     ledger = {row["key"]: f"{row['dcr']:.2f}" for row in result["ledger"]}
     assert (data["top_dcr"], data["shear_dcr"]) == (ledger["flexure_top"], ledger["shear"])
-    assert len(data["options"]) == len(result["options"]["bot"]) == 3  # the markup has three options to fill
+    assert len(data["options"]) == len(result["options"]["bot"]) >= 2  # home.js makes an option of each
     for shown, option in zip(data["options"], result["options"]["bot"], strict=True):
         assert (shown["sig"], shown["bars"], shown["area"]) == (option["signature"], option["bars"], option["area"])
         assert shown["dcr"] == f"{option['dcr']:.2f}"
@@ -220,43 +233,52 @@ def test_the_us_hero_is_the_us_example():
         moved = {row["key"]: f"{row['dcr']:.2f}" for row in picked["ledger"]}
         assert moved == {"flexure_bottom": shown["dcr"], "flexure_top": data["top_dcr"], "shear": data["shear_dcr"]}
         assert max(row["dcr"] for row in picked["ledger"]) == picked["ledger"][0]["dcr"]
-        low = [bar for bar in picked["section"]["bars"] if bar["y"] < section["height"] / 2]
+        low = [bar for bar in _main(picked["section"]) if bar["y"] < section["height"] / 2]
         assert shown["low"].split(";") == [f"{bar['x']:g},{bar['y']:g},{bar['d']:g}" for bar in low]
 
 
-# The four beams of mento's user guide (BeamSummary), a units row first as the Excel carries it.
-GUIDE_BEAMS = {
+# The four beams of mento's example notebook (beam_summary_ACI_318-19), as BeamSummary reads them:
+# the sections and the forces, each with its units row first as the sheets of the Excel carry it.
+GUIDE_SECTIONS = {
     "Label": ["", "V101", "V102", "V103", "V104"],
-    "Comb.": ["", "ELU 1", "ELU 2", "ELU 3", "ELU 4"],
     "b": ["cm", 20, 20, 20, 20],
     "h": ["cm", 50, 50, 50, 50],
     "cc": ["mm", 25, 25, 25, 25],
+    "legs": ["", 0, 2, 2, 2],
+    "dbs": ["mm", 0, 10, 10, 10],
+    "sl": ["cm", 0, 20, 20, 20],
+    "n1_top": ["", 2, 2, 2, 2],
+    "db1_top": ["mm", 8, 12, 8, 8],
+    "n2_top": ["", 0, 1, 0, 0],
+    "db2_top": ["mm", 0, 16, 0, 0],
+    "n1_bot": ["", 2, 2, 2, 2],
+    "db1_bot": ["mm", 12, 8, 12, 12],
+    "n2_bot": ["", 1, 0, 1, 0],
+    "db2_bot": ["mm", 10, 0, 10, 0],
+    "n3_bot": ["", 2, 0, 2, 0],
+    "db3_bot": ["mm", 12, 0, 16, 0],
+}
+GUIDE_FORCES = {
+    "Label": ["", "V101", "V102", "V103", "V104"],
+    "Comb.": ["", "ELU 1", "ELU 2", "ELU 3", "ELU 4"],
     "Nx": ["kN", 0, 0, 0, 0],
     "Vz": ["kN", 20, -50, 100, 100],
     "My": ["kNm", 0, -35, 40, 45],
-    "ns": ["", 0, 1, 1, 1],
-    "dbs": ["mm", 0, 6, 6, 6],
-    "sl": ["cm", 0, 20, 20, 20],
-    "n1": ["", 2, 2, 2, 2],
-    "db1": ["mm", 12, 12, 12, 12],
-    "n2": ["", 1, 1, 1, 0],
-    "db2": ["mm", 10, 16, 10, 0],
-    "n3": ["", 2, 0, 2, 0],
-    "db3": ["mm", 12, 0, 16, 0],
-    "n4": ["", 0, 0, 0, 0],
-    "db4": ["mm", 0, 0, 0, 0],
 }
 
 
 def test_python_section_shows_what_beam_summary_returns():
-    """The table under the notebook: the governing DCR of each beam with its rebar, then after design()."""
+    """The table under the notebook: the governing DCR of each beam with its rebar, then after design(),
+    each with the verdict mento gives it (a section that misses a limit fails, whatever its DCR)."""
     conc = Concrete_ACI_318_19(name="H-25", f_c=25 * MPa)
     steel = SteelBar(name="ADN 420", f_y=420 * MPa)
-    summary = BeamSummary(conc, steel, pd.DataFrame(GUIDE_BEAMS))
+    summary = BeamSummary(conc, steel, pd.DataFrame(GUIDE_SECTIONS), pd.DataFrame(GUIDE_FORCES))
 
-    def governing() -> dict[str, float]:
+    def governing() -> dict[str, tuple[str, bool]]:
         rows = summary.check().iloc[1:]  # the first row holds the units
-        return {row["Beam"]: max(row["DCRb,top"], row["DCRb,bot"], row["DCRv"]) for _, row in rows.iterrows()}
+        dcrs = {row["Beam"]: max(row["DCRb,top"], row["DCRb,bot"], row["DCRv"]) for _, row in rows.iterrows()}
+        passes = {verdict.key[1]: verdict.passes for verdict in summary.results}
+        return {label: (f"{dcr:.2f}", passes[label]) for label, dcr in dcrs.items()}
 
     # the glue leaves mento in the language of the last report; the columns are read in English
     previous = mento.get_language()
@@ -267,13 +289,19 @@ def test_python_section_shows_what_beam_summary_returns():
         designed = governing()
     finally:
         mento.set_language(previous)
-    shown = dict(re.findall(r'data-sum="(V\d+ \w+)">([^<]*)<', PAGES["home"].read_text(encoding="utf-8")))
-    expected = {f"{label} check": f"{dcr:.2f}" for label, dcr in checked.items()}
-    expected |= {f"{label} design": f"{dcr:.2f}" for label, dcr in designed.items()}
+    source = PAGES["home"].read_text(encoding="utf-8")
+    shown = {
+        cell: (dcr, state == "ok")
+        for state, cell, dcr in re.findall(r'<td class="dcr (ok|bad)"><span data-sum="(V\d+ \w+)">([^<]*)<', source)
+    }
+    expected = {f"{label} check": verdict for label, verdict in checked.items()}
+    expected |= {f"{label} design": verdict for label, verdict in designed.items()}
     assert shown == expected
-    # the story the table tells: two beams fail as drawn, all pass once mento designs them
-    assert sorted(label for label, dcr in checked.items() if dcr > 1) == ["V103", "V104"]
-    assert max(designed.values()) <= 1
+    # the story the table tells: a beam fails as drawn, all pass once mento designs them
+    assert sorted(label for label, (_, passes) in checked.items() if not passes) == ["V104"]
+    assert all(passes for _, passes in designed.values())
+    # and the snippet above it reads them the way mento now does: two sheets, sections and forces
+    assert "BeamSummary.from_excel(conc, steel," in re.sub(r"<[^>]+>", "", source)
 
 
 @pytest.mark.parametrize("page", ["slab", "wall"])

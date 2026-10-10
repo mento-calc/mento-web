@@ -5,6 +5,7 @@ import io
 import itertools
 import json
 
+import common
 import docx
 import pytest
 
@@ -124,3 +125,84 @@ def test_bars_closer_than_the_minimum_clear_spacing_fail():
     result = solve(mode="check", rebar={"bot": {"d": 16, "s": 3}, "top": {"d": 12, "s": 25}})
     spacing = [notice for notice in result["notices"] if notice["code"] == "bar_spacing_below_min"]
     assert spacing and spacing[0]["severity"] == "bad" and spacing[0]["values"]["face"] == "bottom"
+
+
+# ------------------------------------------------------------------ the slab list (Excel)
+
+
+def saved(**changes):
+    """A slab as the page saves it in its list: the payload it sent, with the layouts it got back."""
+    data = {**slab.EXAMPLE, **changes}
+    result = json.loads(slab.run(json.dumps(data)))
+    assert result["ok"], result
+    return {**data, "layouts": result["layouts"]}
+
+
+US_SLAB = {key: value for key, value in slab.EXAMPLE_US.items() if key != "lang"}
+
+
+def excel(slabs):
+    file = json.loads(slab.summary(json.dumps({"lang": "es", "slabs": slabs})))
+    assert file["ok"], file
+    assert file["name"] == "slabs.xlsx"
+    return io.BytesIO(base64.b64decode(file["base64"]))
+
+
+def sheets(slabs):
+    import pandas as pd
+
+    return pd.read_excel(excel(slabs), sheet_name=None)
+
+
+def test_the_excel_is_the_two_sheets_the_slab_summary_reads():
+    book = sheets([saved(), saved(label="L-102", height=25)])
+    assert list(book) == ["Sections", "Forces"]
+    sections, forces = book["Sections"], book["Forces"]
+    assert sections["Label"].tolist()[1:] == ["L-101", "L-102"]
+    assert sections["h"].tolist()[1:] == [20, 25]
+    assert sections[["b", "h", "cc", "db1_bot", "s1_bot"]].iloc[0].tolist() == ["cm", "cm", "mm", "mm", "cm"]
+    assert forces["Label"].tolist()[1:] == ["L-101"] * 2 + ["L-102"] * 2
+    assert forces["My"].tolist()[1:3] == [32, -22]
+
+
+def test_a_section_carries_the_mesh_of_both_faces():
+    data = saved()
+    layouts = data["layouts"]
+    row = sheets([data])["Sections"].iloc[1]
+    for face in ("bot", "top"):
+        assert [row[f"db1_{face}"], row[f"s1_{face}"]] == [layouts[face]["d"], layouts[face]["s"]]
+        assert [row[f"db3_{face}"], row[f"s3_{face}"]] == [0, 0]  # the page gives one layer per face
+
+
+def test_mento_reads_the_excel_and_checks_what_the_page_checked():
+    from mento import OneWaySlabSummary
+
+    for data in (saved(), saved(**US_SLAB)):
+        page = {row["key"]: row["dcr"] for row in json.loads(slab.run(json.dumps(data)))["ledger"]}
+        concrete, steel = common.materials(data)
+        summary = OneWaySlabSummary.from_excel(concrete, steel, excel([data]))
+        summary.check()
+        (verdict,) = summary.results
+        assert verdict.passes
+        got = {"flexure_bottom": verdict.bottom.DCR, "flexure_top": verdict.top.DCR, "shear": verdict.shear.DCR}
+        assert {key: round(value, 3) for key, value in got.items()} == page
+
+
+def test_a_us_list_is_written_in_inches_and_kip():
+    book = sheets([saved(**US_SLAB)])
+    assert book["Sections"][["b", "h", "cc", "db1_bot", "s1_bot"]].iloc[0].tolist() == ["in"] * 5
+    assert book["Forces"][["Nx", "Vz", "My"]].iloc[0].tolist() == ["kip", "kip", "kip·ft"]
+    assert book["Sections"]["db1_bot"].iloc[1] == 0.375  # a #3
+
+
+def test_slabs_of_other_materials_do_not_share_an_excel():
+    def failed(slabs):
+        return json.loads(slab.summary(json.dumps({"lang": "es", "slabs": slabs})))
+
+    assert failed([saved(), saved(label="L-102", fy=500)]) == {
+        "ok": False,
+        "kind": "input",
+        "field": "list",
+        "message": "materials",
+    }
+    assert failed([])["message"] == "empty"

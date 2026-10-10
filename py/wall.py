@@ -1,7 +1,7 @@
 """Glue between the shear wall page and mento: JSON in, JSON out.
 
-In-plane shear only, which is what mento checks today: a horizontal mesh that carries the shear
-and a vertical mesh that covers the minimum::
+In-plane shear only, which is what mento checks today, under ACI 318-19, CIRSOC 201-25 and
+EN 1992-1-1: a horizontal mesh that carries the shear and a vertical mesh that covers the minimum::
 
     python -c "import wall, json; print(wall.run(json.dumps(wall.EXAMPLE)))"
 """
@@ -15,7 +15,7 @@ from typing import Any
 
 import common
 import mento
-from mento import Forces, ShearWall, ureg
+from mento import Forces, Node, ShearWall, ShearWallSummary, ureg
 
 # The worked example every visitor opens: a 20 cm wall, 3 m long, one storey high.
 EXAMPLE: dict[str, Any] = {
@@ -54,8 +54,6 @@ EXAMPLE_US: dict[str, Any] = {
     ],
 }
 GROUPS = ("horizontal", "vertical")
-# ACI 318-19 §11.7.2.1 and §11.7.3.1, and EN 1992-1-1 §9.6: the mesh never wider than 45 cm (18 in).
-MAX_SPACING = {"si": 45.0, "us": 18.0}
 
 
 def _build(data: dict[str, Any]) -> ShearWall:
@@ -120,13 +118,17 @@ def _options(wall: ShearWall, layouts: dict[str, Any], units: common.Units, limi
     """
     design = wall.shear_design
     required = {"horizontal": max(design.rho_t_req, design.rho_t_min), "vertical": design.rho_l_min}
+    # The widest each mesh may be is the code's, for this wall: 3h, 45 cm and a fraction of its length
+    # under ACI 318-19 §11.7, 40 cm (and 3h for the vertical bars) under EN 1992-1-1 §9.6.
+    widest = {"horizontal": design.s_h_max, "vertical": design.s_v_max}
     thickness = float(wall.thickness.to(units.length).magnitude)
     options: dict[str, Any] = {}
     for group in GROUPS:
         # ρ = (two curtains × A_b) / (t × s), so the steel the ratio asks for is ρ·t·100 cm²/m
         # (ρ·t·12 in²/ft) over both curtains, and half of that is what one curtain has to provide.
         per_curtain = required[group] * thickness * units.run / 2
-        candidates = common.spacing_options(per_curtain, layouts[group], limit, MAX_SPACING[units.name], units)
+        max_spacing = float(widest[group].to(units.length).magnitude)
+        candidates = common.spacing_options(per_curtain, layouts[group], limit, max_spacing, units)
         options[group] = [
             {
                 "bars": common.mesh_bars(layout, units),
@@ -264,3 +266,23 @@ def report(payload: str) -> str:
     wall, _ = _checked(data, forces, layouts)
     content = common.write_report([wall.shear_results_detailed_doc], wall.label)
     return json.dumps([{"name": f"{wall.label} - {data['code']}.docx", "base64": content}])
+
+
+# ------------------------------------------------------------------------ the list of saved walls
+# Every wall the visitor saved, in the Excel ``ShearWallSummary.from_excel`` reads: a row per wall in
+# Sections, with its two meshes, and a row per combination in Forces. mento writes it
+# (common.summary_excel), from each wall as the page checked it. The page has no storeys, so the
+# optional Level of a wall stays empty.
+
+
+def _saved(data: dict[str, Any]) -> Node:
+    """A saved wall: what the page sent, with the meshes it got back."""
+    wall = _build(data)
+    _apply(wall, data.get("layouts") or {}, common.units_of(data))
+    return Node(section=wall, forces=common.build_forces(data))
+
+
+def summary(payload: str) -> str:
+    """The saved walls as one Excel. Never raises: errors come back as ``{"ok": false}``."""
+    data = json.loads(payload)
+    return common.summary_excel(ShearWallSummary, data.get("walls") or [], _saved, "walls.xlsx", data.get("lang", "en"))

@@ -166,6 +166,13 @@ code,.code{font-family:var(--font-mono);font-size:var(--fs-12)}
 .bars .n .i:focus-visible{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft)}
 .bars .n .i.is-invalid{border-color:var(--bad);box-shadow:0 0 0 2px var(--bad-soft)}
 .bars .n .op{color:var(--ink-2);font-size:var(--fs-12)}
+.bars-err{font-size:var(--fs-12);color:var(--bad);line-height:var(--lh-ui)}
+/* what a beam's cage carries besides its groups: skin and mounting bars, laid out by mento */
+.xtras{display:grid;gap:6px}
+.xtras:empty{display:none}
+.xtra{display:grid;grid-template-columns:70px minmax(0,1fr);gap:var(--s-2);align-items:baseline;padding:0 10px}
+.xtra .val{font-family:var(--font-mono);font-size:var(--fs-14)}
+.xtra .why{font-family:var(--font-sans);font-size:var(--fs-12);color:var(--ink-2)}
 /* verdict block */
 .card{background:var(--surface);border:var(--bw) solid var(--line-2);border-radius:var(--r-2)}
 .verdict{padding:14px var(--s-4) 12px;border-bottom:var(--bw) solid var(--line-3);display:flex;align-items:center;gap:14px;border-radius:var(--r-2) var(--r-2) 0 0}
@@ -769,11 +776,19 @@ a.btn--sec:hover,a.btn--sec:active{color:var(--ink)}
 .dtl-tb td.unit{padding-left:4px}
 .dtl-tb .ok{text-align:right;white-space:nowrap}
 .dtl-tb tr.is-dcr > *{background:var(--surface-2);font-weight:600}
+.dtl-tb tr.is-remark th{font-size:var(--fs-12);font-style:italic}
+.dtl-tb .state{font-weight:500} .dtl-tb .state .notes{display:block;margin-top:2px;font-weight:400;font-size:var(--fs-12);color:var(--ink-2);line-height:1.4}
 .dtl-tb td.dcr.ok{color:var(--ok)} .dtl-tb td.dcr.warn{color:var(--warn)} .dtl-tb td.dcr.bad{color:var(--bad)}
 .dtl-mark{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:var(--fs-11);font-weight:500;line-height:1;border-radius:999px;padding:3px 7px;vertical-align:middle}
 .dtl-mark.ok{background:var(--ok-soft);color:var(--ok);padding:3px}
 .dtl-mark.bad{background:var(--bad-soft);color:var(--bad);padding:3px}
+.dtl-mark.has-code{padding:3px 8px 3px 3px}
 .dtl-mark.warn{background:var(--warn-soft);color:var(--warn-ink);box-shadow:inset 0 0 0 1px var(--warn-line)}
+
+.dtl-notes{margin:0;padding:10px 12px;border-top:var(--bw) solid var(--line-3);display:grid;gap:6px;font-size:var(--fs-12);color:var(--ink-2);line-height:1.45}
+.dtl-notes div{display:flex;gap:10px;align-items:baseline}
+.dtl-notes dt{font-family:var(--font-mono);font-size:var(--fs-11);font-weight:500;color:var(--ink);flex:0 0 3.6em}
+.dtl-notes dd{margin:0}
 
 /* phone: a table of checks has no room for five columns. Its header goes and each row folds in
    two, the description on top and the figures under it, each with its column's name */
@@ -869,3 +884,27 @@ a.btn--sec:hover,a.btn--sec:active{color:var(--ink)}
   .viz-draw .dw-dt,.viz-prop,.viz-prop .opt,.viz-verdict,.viz-verdict .mark,.viz-verdict .meter i{animation:none}
   .meter i{transition:none}
 }
+
+/* the list of saved beams (beam/): one row each, the open one marked, the rest a click away */
+.beams-t{margin:0;padding:14px var(--s-4) 4px;font-size:var(--fs-16);font-weight:600}
+.beams .hint{padding:6px var(--s-4) 4px}
+.beams .hint a{color:var(--brand-ink)}
+.beams-hint{padding-bottom:12px !important}
+.beams-list{list-style:none;margin:6px 0 0;padding:0;border-top:var(--bw) solid var(--line-3)}
+.bm{display:flex;align-items:stretch;border-bottom:var(--bw) solid var(--line-3)}
+.bm[aria-current="true"]{background:var(--brand-soft);box-shadow:inset 3px 0 0 var(--brand)}
+.bm-open{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;padding:10px var(--s-4);background:none;border:0;text-align:left;cursor:pointer;color:inherit;font:inherit}
+.bm-open:hover{background:var(--surface-2)} .bm[aria-current="true"] .bm-open:hover{background:transparent}
+.bm-top{display:flex;align-items:baseline;gap:var(--s-3);flex-wrap:wrap}
+.bm-name{font-size:var(--fs-14);font-weight:600}
+.bm-size,.bm-combos{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--ink-2)}
+.bm-top .dcr{margin-left:auto;font-size:var(--fs-12);font-weight:500;padding:1px 7px;border-radius:999px;align-self:center}
+.bm-top .dcr.ok{background:var(--ok-soft);color:var(--ok-ink)}
+.bm-top .dcr.warn{background:var(--warn-soft);color:var(--warn-ink)}
+.bm-top .dcr.bad{background:var(--bad-soft);color:var(--bad-ink)}
+.bm-bars{display:flex;flex-wrap:wrap;gap:2px var(--s-3);font-family:var(--font-mono);font-size:var(--fs-12)}
+.bm-bars .k{font-family:var(--font-sans);color:var(--ink-2)}
+.bm-rm{flex:none;width:40px;background:none;border:0;border-left:var(--bw) solid var(--line-3);color:var(--ink-2);font-size:18px;cursor:pointer}
+.bm-rm:hover{background:var(--bad-soft);color:var(--bad-ink)}
+.beams .actions{align-items:center}
+@media (max-width:720px){ .bm-rm{width:var(--ctl-h-touch)} .beams-t{padding-top:12px} .beams{border-left:0;border-right:0;border-radius:0} }

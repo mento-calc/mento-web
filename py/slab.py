@@ -13,7 +13,7 @@ from typing import Any
 
 import common
 import mento
-from mento import Node, OneWaySlab, ureg
+from mento import Node, OneWaySlab, OneWaySlabSummary, ureg
 
 # The worked example every visitor opens: a 20 cm slab spanning about 5 m, with a support moment.
 EXAMPLE: dict[str, Any] = {
@@ -92,12 +92,18 @@ def _apply(slab: OneWaySlab, layouts: dict[str, Any], units: common.Units) -> No
         slab.set_slab_longitudinal_rebar_top(d_b1=units.bar(top["d"]), s_b1=top["s"] * ureg(units.length))
 
 
-def _checked(data: dict[str, Any], forces: list[Any], layouts: dict[str, Any]) -> tuple[OneWaySlab, Node]:
-    """A fresh strip with that mesh in it, checked. Fresh because designing or checking leaves
-    state behind on the section."""
+def _reinforced(data: dict[str, Any], forces: list[Any], layouts: dict[str, Any]) -> tuple[OneWaySlab, Node]:
+    """A fresh strip with that mesh in it, under its combinations."""
     slab = _build(data)
     node = Node(section=slab, forces=forces)
     _apply(slab, layouts, common.units_of(data))
+    return slab, node
+
+
+def _checked(data: dict[str, Any], forces: list[Any], layouts: dict[str, Any]) -> tuple[OneWaySlab, Node]:
+    """A fresh strip with that mesh in it, checked. Fresh because designing or checking leaves
+    state behind on the section."""
+    slab, node = _reinforced(data, forces, layouts)
     node.check()
     return slab, node
 
@@ -257,3 +263,22 @@ def report(payload: str) -> str:
     slab, node = _checked(data, forces, layouts)
     content = common.write_report([node.flexure_results_detailed_doc, node.shear_results_detailed_doc], slab.label)
     return json.dumps([{"name": f"{slab.label} - {data['code']}.docx", "base64": content}])
+
+
+# ------------------------------------------------------------------------ the list of saved slabs
+# Every slab the visitor saved, in the Excel ``OneWaySlabSummary.from_excel`` reads: a row per slab
+# in Sections, with the diameter and spacing of both faces, and a row per combination in Forces.
+# mento writes it (common.summary_excel), from each strip as the page checked it.
+
+
+def _saved(data: dict[str, Any]) -> Node:
+    """A saved slab: what the page sent, with the layouts it got back."""
+    return _reinforced(data, common.build_forces(data), data.get("layouts") or {})[1]
+
+
+def summary(payload: str) -> str:
+    """The saved slabs as one Excel. Never raises: errors come back as ``{"ok": false}``."""
+    data = json.loads(payload)
+    return common.summary_excel(
+        OneWaySlabSummary, data.get("slabs") or [], _saved, "slabs.xlsx", data.get("lang", "en")
+    )
