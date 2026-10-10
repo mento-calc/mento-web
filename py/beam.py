@@ -16,6 +16,9 @@ from typing import Any
 import common
 import mento
 from mento import Forces, Node, RectangularBeam, ureg
+from mento.cage_detailing import CageDetailingError, build_cage_detailing
+from mento.design_results import STIRRUPS, transverse_notation
+from mento.plots.sections import steel_ratio
 
 # The worked example every visitor opens: it must pass with every DCR between 0.7 and 0.9, and
 # the home's hero shows its result (py/test_site.py checks that the two agree).
@@ -76,75 +79,125 @@ def _build_beam(data: dict[str, Any]) -> RectangularBeam:
     )
 
 
-def _rows(layout: dict[str, Any]) -> list[list[tuple[int, float]]]:
-    """The bar groups of one face as rows, nearest the face first: ``(n, d)`` pairs, ``d`` as the
-    layout names the bar (its diameter in mm, or its ASTM size).
+def _row(layout: dict[str, Any], layer: int) -> list[tuple[int, float]]:
+    """The bar groups of one row of a face (1 nearest the face, 2 behind it): ``(n, d)`` pairs, ``d``
+    as the layout names the bar (its diameter in mm, or its ASTM size).
 
     A layout names the row of every group, as mento's setters do: n1 and n2 are the corner and
     the inner bars of the first row, n3 and n4 those of the second.
     """
-    rows = []
-    for first, second in ((1, 2), (3, 4)):
-        row = [
-            (int(layout[f"n{index}"]), float(layout[f"d{index}"]))
-            for index in (first, second)
-            if layout.get(f"n{index}") and layout.get(f"d{index}")
-        ]
-        if row:
-            rows.append(row)
-    return rows
+    return [
+        (int(layout[f"n{index}"]), float(layout[f"d{index}"]))
+        for index in (2 * layer - 1, 2 * layer)
+        if layout.get(f"n{index}") and layout.get(f"d{index}")
+    ]
+
+
+def _rows(layout: dict[str, Any]) -> list[list[tuple[int, float]]]:
+    """The rows of a face that carry bars, nearest the face first."""
+    return [row for row in (_row(layout, 1), _row(layout, 2)) if row]
+
+
+def _geometry(beam: RectangularBeam) -> tuple[Any, bool]:
+    """The cage as mento details it (``beam.detailing_geometry``), and whether its stirrups can be
+    drawn: the bars seated in the stirrup bends, a mounting bar wherever a corner or a leg has no
+    bar to hold, the skin bars of a deep beam.
+
+    A cage mento cannot detail is drawn as ``beam.plot()`` draws it: without the skin when the skin
+    is what does not fit, otherwise as the checks assume it (``beam.section_geometry``), and without
+    stirrups when they are too narrow for their own bends. ``beam.warnings`` says what failed."""
+    try:
+        return beam.detailing_geometry, True
+    except CageDetailingError as error:
+        if error.reason == "skin":
+            try:
+                return build_cage_detailing(beam, include_skin=False), True
+            except CageDetailingError as base_error:
+                error = base_error
+        return beam.section_geometry, error.reason != "bend"
 
 
 def _section(beam: RectangularBeam, layouts: dict[str, Any], units: common.Units) -> dict[str, Any]:
-    """Section geometry in cm (or in), origin at the bottom left corner, for the page to draw,
-    with a label for every row of bars at that row's height."""
-    width = float(beam.width.to(units.length).magnitude)
-    height = float(beam.height.to(units.length).magnitude)
-    cover = float(beam.c_c.to(units.length).magnitude)
-    transverse = beam.reinforcement.transverse
-    stirrup = float(transverse.d_b.to(units.length).magnitude) if transverse.n_stirrups else 0.0
-    edge = cover + stirrup
-    row_gap = float(beam.settings.layers_spacing.to(units.length).magnitude)
-    bend = 0.43 * stirrup
+    """The section in cm (or in), origin at the bottom left corner, for the page to draw: mento's own
+    geometry, piece by piece, with a label for every row of bars at that row's height.
 
-    bars: list[dict[str, float]] = []
-    labels: dict[str, list[dict[str, Any]]] = {"bot": [], "top": []}
+    ``closed`` are the closed stirrups and ``ties`` the legs between them, by their centrelines.
+    A bar is "main" (the steel the checks count), "mounting" or "skin"; neither of the last two
+    adds to a resistance. ``steel`` is the steel of the whole cage per volume of concrete."""
+    geometry, with_stirrups = _geometry(beam)
 
-    def place(layout: dict[str, Any], bottom: bool) -> None:
-        offset = edge
-        for row in _rows(layout):
-            tallest = max(units.size(d) for _, d in row)
-            centre = offset + tallest / 2
-            labels["bot" if bottom else "top"].append(
-                {"y": round(centre if bottom else height - centre, 3), "bars": _group_bars(row, units)}
-            )
-            for position, (n, bar) in enumerate(row):
-                d = units.size(bar)
-                y = offset + d / 2 if bottom else height - offset - d / 2
-                span = width - 2 * edge - d
-                for i in range(n):
-                    nudge_x = nudge_y = 0.0
-                    if position == 0:  # corner bars, spread from leg to leg
-                        x = width / 2 if n == 1 else edge + d / 2 + i * span / (n - 1)
-                        # the first row's corners sit in the stirrup bend, as beam.plot() does
-                        if n > 1 and i in (0, n - 1) and offset == edge:
-                            nudge_x = bend if i == 0 else -bend
-                            nudge_y = bend if bottom else -bend
-                    else:  # inner bars, evenly between the corners
-                        x = edge + d / 2 + (i + 1) * span / (n + 1)
-                    bars.append({"x": round(x + nudge_x, 3), "y": round(y + nudge_y, 3), "d": round(d, 3)})
-            offset += tallest + row_gap
+    def length(value: Any) -> float:
+        return round(float(value.to(units.length).magnitude), 3)
 
-    place(layouts.get("bot") or {}, bottom=True)
-    place(layouts.get("top") or {}, bottom=False)
+    def name(bars: Any) -> str:
+        """``2Ø8`` for bars of one diameter that no layout names: mounting and skin."""
+        return f"{len(bars)}{units.bar_name(units.bar_of(bars[0].d_b))}"
+
+    def height(bars: Any) -> float:
+        """The middle of the band a row's bars occupy, where ``beam.plot()`` writes its label."""
+        low = min(bar.y - bar.d_b / 2 for bar in bars)
+        high = max(bar.y + bar.d_b / 2 for bar in bars)
+        return length((low + high) / 2)
+
+    kinds = (("main", geometry.bars), ("mounting", geometry.mounting_bars), ("skin", geometry.skin_bars))
+    bars = [
+        {"x": length(bar.x), "y": length(bar.y), "d": length(bar.d_b), "kind": kind}
+        for kind, group in kinds
+        for bar in group
+    ]
+    labels: list[dict[str, Any]] = []
+    for face, group in (("top", "top"), ("bottom", "bot")):
+        for layer in (1, 2):
+            row, placed = _row(layouts.get(group) or {}, layer), geometry.bars_on(face, layer)
+            if row and placed:
+                labels.append({"y": height(placed), "bars": _group_bars(row, units), "kind": group})
+        mounting = [bar for bar in geometry.mounting_bars if bar.face == face]
+        if mounting:
+            labels.append({"y": height(mounting), "bars": name(mounting), "kind": "mounting", "face": group})
+    skin = [bar for bar in geometry.skin_bars if bar.face == "left"]
+    if skin:  # the same bars on each side face
+        labels.append({"y": height(skin), "bars": name(skin), "kind": "skin"})
+
+    width = length(geometry.width)
+    closed = geometry.stirrups if with_stirrups else ()
+    ties = geometry.crossties if with_stirrups else ()
+    ratio = steel_ratio(beam, geometry)
     return {
         "width": width,
-        "height": height,
-        "cover": cover,
+        "height": length(geometry.height),
+        "cover": length(geometry.c_c),
         "unit": units.labels["length"],
-        "stirrups": {"n": int(transverse.n_stirrups or 0), "d": stirrup},
+        # the bar the cage is bent from and the inside diameter of its bends
+        "stirrup": {"d": length(geometry.stirrup_d_b), "bend": length(geometry.stirrup_bend_inner_diameter)},
+        "closed": [
+            {"x0": length(s.x_left), "x1": length(s.x_right), "y0": length(s.y_bottom), "y1": length(s.y_top)}
+            for s in closed
+        ],
+        # a tie mento detailed says which side its hooks open to; the others open towards the middle
+        "ties": [
+            {
+                "x": length(tie.x),
+                "y0": length(tie.y_bottom),
+                "y1": length(tie.y_top),
+                "side": int(tie.side) if tie.extension is not None else (1 if length(tie.x) <= width / 2 else -1),
+            }
+            for tie in ties
+        ],
         "bars": bars,
         "labels": labels,
+        "steel": f"{ratio.magnitude:.0f} {'lb/yd³' if units.us else 'kg/m³'}",
+    }
+
+
+def _extras(section: dict[str, Any], beam: RectangularBeam) -> dict[str, Any]:
+    """What the cage carries beyond the bars the checks count, as the drawing shows it: the skin of
+    each side face, required by the code or proposed by mento's own criterion (every beam 60 cm or
+    24 in deep, or more), and the mounting bars of each face."""
+    labels = section["labels"]
+    skin = next((label["bars"] for label in labels if label["kind"] == "skin"), None)
+    return {
+        "skin": {"bars": skin, "status": beam.skin_reinforcement.status} if skin else None,
+        "mounting": [{"face": label["face"], "bars": label["bars"]} for label in labels if label["kind"] == "mounting"],
     }
 
 
@@ -208,11 +261,13 @@ def _face(face: Any, units: common.Units) -> dict[str, Any]:
 
 # ------------------------------------------------------------------ rebar layouts
 # A layout is what the page, the URL and mento's setters all speak: {"n1": 2, "d1": 16, ...}
-# for a face and {"n": 1, "d": 6, "s": 13} for the stirrups. Diameters in mm and spacing in cm, or
-# ASTM sizes and spacing in inches ({"n1": 2, "d1": 6, ...} is 2#6).
+# for a face and {"n": 2, "d": 6, "s": 13} for the stirrups, where "n" counts their legs as mento
+# does (two per closed stirrup; an odd number from 3 adds a leg to the perimeter stirrup).
+# Diameters in mm and spacing in cm, or ASTM sizes and spacing in inches ({"n1": 2, "d1": 6, ...} is 2#6).
 
 
-_FIT_CODES = ("clear_spacing_below_min", "bars_do_not_fit")
+# A design never leaves its bars closer than the minimum, nor its top bars without room for the vibrator.
+_FIT_CODES = ("clear_spacing_below_min", "clear_spacing_below_vibrator", "bars_do_not_fit")
 
 
 def _fits_one_row(data: dict[str, Any], stirrups: dict[str, Any], face: str, layers: Any) -> bool:
@@ -223,7 +278,7 @@ def _fits_one_row(data: dict[str, Any], stirrups: dict[str, Any], face: str, lay
     units = common.units_of(data)
     if stirrups:
         probe.set_transverse_rebar(
-            n_stirrups=int(stirrups["n"]), d_b=units.bar(stirrups["d"]), s_l=stirrups["s"] * ureg(units.length)
+            n_legs=int(stirrups["n"]), d_b=units.bar(stirrups["d"]), s_l=stirrups["s"] * ureg(units.length)
         )
     first, second = layers
     setter = probe.set_longitudinal_rebar_bot if face == "bot" else probe.set_longitudinal_rebar_top
@@ -253,10 +308,12 @@ def _layers_layout(data: dict[str, Any], stirrups: dict[str, Any], face: str, la
     return layout
 
 
-def _stirrup_layout(n: Any, d_b: Any, s_l: Any, units: common.Units) -> dict[str, Any]:
-    if not n:
+def _stirrup_layout(stirrups: Any, units: common.Units) -> dict[str, Any]:
+    """The layout of the stirrups a section carries, or of one mento's design offers."""
+    if not stirrups.n_legs:
         return {}
-    return {"n": int(n), "d": units.bar_of(d_b), "s": round(float(s_l.to(units.length).magnitude), 3)}
+    spacing = round(float(stirrups.s_l.to(units.length).magnitude), 3)
+    return {"n": int(stirrups.n_legs), "d": units.bar_of(stirrups.d_b), "s": spacing}
 
 
 def _rebar_layouts(rebar: dict[str, Any]) -> dict[str, Any]:
@@ -277,6 +334,8 @@ def _rebar_layouts(rebar: dict[str, Any]) -> dict[str, Any]:
         raise common.InputError("rebar", "bottom")
     stirrups = rebar.get("stirrups") or {}
     n = int(stirrups.get("n") or 0)
+    if n == 1:  # the perimeter stirrup is closed: it has two legs
+        raise common.InputError("rebar", "legs")
     return {
         "bot": bottom,
         "top": face(rebar.get("top") or {}),
@@ -292,14 +351,19 @@ def _signature(layout: dict[str, Any]) -> str:
 
 
 def _layout_bars(layout: dict[str, Any], units: common.Units) -> str:
-    """``3Ø16+1Ø12`` and ``1eØ6/13cm``; ``3#5+1#4`` and ``#3@5in`` (``2×#3@5in``)."""
+    """``3Ø16+1Ø12`` and ``1eØ6/13cm``; ``3#5+1#4`` and ``1s#3@5in``.
+
+    The stirrups are mento's own compact notation, in the language of the page, with the unit of the
+    spacing after it: one closed stirrup, which is two legs, and the legs beyond it. Four legs are
+    ``1e+2rØ10/17cm`` (``1s+2l#3@8in`` in English), three ``1e+1rØ8/15cm``."""
     if not layout:
         return ""
     if "n" in layout:
-        if units.us:
-            count = "" if layout["n"] == 1 else f"{layout['n']:g}×"
-            return f"{count}{units.bar_name(layout['d'])}@{layout['s']:g}in"
-        return f"{layout['n']:g}e{units.bar_name(layout['d'])}/{layout['s']:g}cm"
+        spacing = layout["s"] * ureg(units.length)
+        legs = transverse_notation(
+            STIRRUPS, layout["n"] / 2, units.bar(layout["d"]), spacing, spacing, compact=True, imperial=units.us
+        )
+        return f"{legs}{units.labels['length']}"
     counts: dict[float, int] = {}
     for index in range(1, 5):
         n = int(layout.get(f"n{index}") or 0)
@@ -320,7 +384,7 @@ def _layout_area(layout: dict[str, Any], units: common.Units) -> str:
     if not layout:
         return ""
     if "n" in layout:
-        legs = 2 * layout["n"] * units.bar_area(layout["d"])  # per stirrup line
+        legs = layout["n"] * units.bar_area(layout["d"])  # per stirrup line
         return f"{legs * units.run / layout['s']:.2f} {units.labels['per_length']}"
     total = sum(
         int(layout.get(f"n{i}") or 0) * units.bar_area(layout[f"d{i}"]) for i in range(1, 5) if layout.get(f"n{i}")
@@ -338,12 +402,13 @@ def _apply_layouts(beam: RectangularBeam, layouts: dict[str, Any], units: common
         return out
 
     beam.set_longitudinal_rebar_bot(**kwargs(layouts.get("bot") or {}))
-    if layouts.get("top"):
-        beam.set_longitudinal_rebar_top(**kwargs(layouts["top"]))
+    # A face with no bars has none, as mento's design leaves it: not the 2Ø8 a new beam starts with.
+    # The cage then holds its stirrups there with mounting bars, which add to no resistance.
+    beam.set_longitudinal_rebar_top(**kwargs(layouts.get("top") or {}))
     stirrups = layouts.get("st") or {}
     if stirrups.get("n"):
         beam.set_transverse_rebar(
-            n_stirrups=int(stirrups["n"]), d_b=units.bar(stirrups["d"]), s_l=stirrups["s"] * ureg(units.length)
+            n_legs=int(stirrups["n"]), d_b=units.bar(stirrups["d"]), s_l=stirrups["s"] * ureg(units.length)
         )
 
 
@@ -381,10 +446,9 @@ def _options(data: dict[str, Any], beam: RectangularBeam) -> dict[str, list[dict
     finished section and kept only if it passes with them, so there may be fewer than asked for.
     """
     units = common.units_of(data)
-    transverse = beam.reinforcement.transverse
-    stirrups = [
-        _stirrup_layout(option.n_stirrups, option.d_b, option.s_l, units) for option in beam.shear_design.options
-    ] or [_stirrup_layout(transverse.n_stirrups, transverse.d_b, transverse.s_l, units)]
+    stirrups = [_stirrup_layout(option, units) for option in beam.shear_design.options] or [
+        _stirrup_layout(beam.reinforcement.transverse, units)
+    ]
     flexure = beam.flexure_design
     candidates = {
         group: [_layers_layout(data, stirrups[0], group, option.layers) for option in face.options]
@@ -452,6 +516,10 @@ def _select(options: dict[str, Any], choice: dict[str, Any]) -> tuple[dict[str, 
 
 # ------------------------------------------------------------- verdict and notices
 
+# What only a design can say: that no layout that fits the section carries the moment, and what the
+# closest one carries. mento keeps it on the beam it designed, not on one given the same bars by hand.
+_SHORTFALL_CODES = ("As_below_required", "section_too_small_for_moment")
+
 
 def _solve(data: dict[str, Any]) -> dict[str, Any]:
     lang = data.get("lang", "en")
@@ -485,6 +553,12 @@ def _solve(data: dict[str, Any]) -> dict[str, Any]:
     flexure = beam.flexure_design
     shear = beam.shear_design
     detailed = common.detailed(node.flexure_results_detailed, node.shear_results_detailed)
+    section = _section(beam, layouts, units)
+    complies = bool(flexure.complies) and shear.DCR <= 1
+    notices = common.warning_notices(node, list(captured))
+    if not check_mode and not complies:
+        shortfall = [notice for notice in common.warning_notices(designed, []) if notice["code"] in _SHORTFALL_CODES]
+        notices += [notice for notice in shortfall if notice["code"] not in {known["code"] for known in notices}]
     return {
         "ok": True,
         "version": mento.__version__,
@@ -496,12 +570,12 @@ def _solve(data: dict[str, Any]) -> dict[str, Any]:
         "options": options,
         "selected": selected,
         "changed": changed,
-        "complies": bool(flexure.complies) and shear.DCR <= 1,
+        "complies": complies,
         "ledger": [
             *common.flexure_rows(beam, forces, data["code"], units),
             common.shear_row(beam, forces, data["code"], units),
         ],
-        "notices": common.warning_notices(node, list(captured)),
+        "notices": notices,
         "flexure": {"bottom": _face(flexure.bottom, units), "top": _face(flexure.top, units)},
         "shear": {
             "stirrups": _layout_bars(layouts.get("st") or {}, units),
@@ -512,7 +586,8 @@ def _solve(data: dict[str, Any]) -> dict[str, Any]:
             "enough": _covers(shear.A_v, getattr(shear, "A_v_req", None)),
         },
         "tables": {"flexure": _table(flexure_table), "shear": _table(shear_table)},
-        "section": _section(beam, layouts, units),
+        "section": section,
+        **_extras(section, beam),
         **detailed,
     }
 

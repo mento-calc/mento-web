@@ -113,7 +113,11 @@
   "u_bar_us": "número de barra",
   "u_barunit": " en mm",
   "u_barunit_us": "",
-  "barhint_us": "Número de barra (#) y separación en in. Dejá 0 la cara que no uses."
+  "barhint_us": "Número de barra (#) y separación en in. Dejá 0 la cara que no uses.",
+  "notice_info": "Nota.",
+  "note_one": "1 nota",
+  "note_many": "{n} notas",
+  "no_steel": "sin demanda · sin armadura"
  },
  "en": {
   "calc": "Calculators",
@@ -229,6 +233,10 @@
   "u_bar_us": "bar size",
   "u_barunit": " in mm",
   "u_barunit_us": "",
-  "barhint_us": "Bar size (#), spacing in inches. Leave 0 for the face you do not use."
+  "barhint_us": "Bar size (#), spacing in inches. Leave 0 for the face you do not use.",
+  "notice_info": "Note.",
+  "note_one": "1 note",
+  "note_many": "{n} notes",
+  "no_steel": "no demand · no reinforcement"
  }
 }

@@ -31,6 +31,7 @@ from mento import (
     bar_diameter,
     ureg,
 )
+from mento.verification import warning_category
 
 CONCRETES = {
     "ACI 318-19": Concrete_ACI_318_19,
@@ -383,7 +384,7 @@ def spacing_options(
 
 def signature(layout: dict[str, Any]) -> str:
     """Short, stable name of a layout: what the URL keeps and what re-picks it after a recalc."""
-    if "s" in layout and "n" in layout:  # stirrups: count, diameter and spacing
+    if "s" in layout and "n" in layout:  # stirrups: legs, diameter and spacing
         return f"{layout['n']:g}x{layout['d']:g}@{layout['s']:g}"
     if "s" in layout:  # a mesh: diameter at a spacing
         return f"{layout['d']:g}@{layout['s']:g}"
@@ -414,19 +415,26 @@ def captured_notices(captured: list[Any]) -> list[dict[str, Any]]:
     return [{"code": "mento", "severity": "warn", "values": {"message": str(item.message)}} for item in captured]
 
 
+# What each of mento's warning categories (``mento.verification.warning_category``) is to the page.
+# A strength the section lacks ("resistance") or a limit of the code it misses ("failed": spacing,
+# bars that do not fit, a cage that cannot be detailed) fails the element, whatever its DCR. A check
+# mento leaves pending is flagged and fails nothing, and a note only informs (the skin a deep beam
+# requires, which mento lays out). A code mento has not classed is pending.
+SEVERITY = {"resistance": "bad", "failed": "bad", "pending": "warn", "informative": "info"}
+
+
 def warning_notices(element: Any, captured: list[Any]) -> list[dict[str, Any]]:
     """What the page flags, as mento judges it: its Python warnings, then its ``DesignWarning``s.
 
-    Every ``DesignWarning`` is a limit of the code the section misses (minimum or maximum steel,
-    spacing, bars that do not fit, a section that is not tension-controlled), so each one fails the
-    element, whatever its DCR. ``code`` is mento's stable one; the page shows ``message``, which
-    mento writes in the language set with ``mento.set_language``."""
+    ``severity`` is the page's reading of mento's category (``SEVERITY``): only "bad" fails the
+    element. ``code`` is mento's stable one; the page shows ``message``, which mento writes in the
+    language set with ``mento.set_language``."""
     notices = captured_notices(captured)
     for warning in element.warnings:
         notices.append(
             {
                 "code": warning.code,
-                "severity": "bad",
+                "severity": SEVERITY.get(warning_category(warning.code), "warn"),
                 "message": warning.message,
                 "values": {
                     "face": warning.face,

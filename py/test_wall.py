@@ -9,7 +9,7 @@ import pytest
 
 import wall
 
-CODES = ["ACI 318-19", "CIRSOC 201-25"]  # EN has no wall hooks in mento 1.3.0
+CODES = ["ACI 318-19", "CIRSOC 201-25", "EN 1992-2004"]
 
 
 def solve(**changes):
@@ -17,11 +17,12 @@ def solve(**changes):
 
 
 @pytest.mark.parametrize("code", CODES)
-def test_design_passes_for_every_code_that_checks_walls(code):
+def test_design_passes_for_every_code(code):
     result = solve(code=code)
     assert result["ok"], result
     assert result["rebar"]["horizontal"].startswith("Ø")
     assert result["ledger"][0]["dcr"] <= 1
+    assert result["complies"] and not [notice for notice in result["notices"] if notice["severity"] == "bad"]
 
 
 def test_the_worked_example_is_used_between_07_and_09():
@@ -54,6 +55,29 @@ def test_alternatives_are_other_diameters_of_the_same_steel():
     assert max(areas) - min(areas) < max(areas) * 0.2
     for option in options:
         assert option["layout"]["s"] <= 45  # the code's limit for a wall mesh
+
+
+def test_a_wall_under_en_1992_is_designed_in_its_notation_and_to_its_limits():
+    """mento designs walls to EN 1992-1-1 too: V_Rd against V_Ed, and a mesh no wider than the
+    400 mm of §9.6, which is what the alternatives are held to as well."""
+    result = solve(code="EN 1992-2004", fy=500)
+    (row,) = result["ledger"]
+    assert row["symbol"] == "VRd" and row["capacity"] > row["demand"] == 700.0
+    assert {"VRd,c", "VRd,s", "VRd,max"} <= set(result["tables"]["shear"]["columns"])
+    for group in ("horizontal", "vertical"):
+        assert len(result["options"][group]) > 1
+        assert all(option["layout"]["s"] <= 40 for option in result["options"][group])
+    for option in result["options"]["horizontal"]:
+        picked = solve(code="EN 1992-2004", fy=500, choice={"horizontal": option["signature"]})
+        assert not [notice["code"] for notice in picked["notices"] if notice["code"].startswith("mesh_spacing")]
+
+
+def test_a_thin_wall_keeps_its_mesh_within_three_thicknesses():
+    """ACI 318-19 §11.7: never wider than 3h. A 10 cm wall takes no alternative past 30 cm."""
+    result = solve(code="ACI 318-19", thickness=10, cover=20, forces=[{"label": "U", "M_y": 0, "V_z": 250, "N_x": 0}])
+    assert result["ok"], result
+    for group in ("horizontal", "vertical"):
+        assert all(option["layout"]["s"] <= 30 for option in result["options"][group])
 
 
 def test_a_chosen_option_survives_a_recalculation():

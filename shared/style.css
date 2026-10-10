@@ -166,6 +166,13 @@ code,.code{font-family:var(--font-mono);font-size:var(--fs-12)}
 .bars .n .i:focus-visible{border-color:var(--brand);box-shadow:0 0 0 2px var(--brand-soft)}
 .bars .n .i.is-invalid{border-color:var(--bad);box-shadow:0 0 0 2px var(--bad-soft)}
 .bars .n .op{color:var(--ink-2);font-size:var(--fs-12)}
+.bars-err{font-size:var(--fs-12);color:var(--bad);line-height:var(--lh-ui)}
+/* what a beam's cage carries besides its groups: skin and mounting bars, laid out by mento */
+.xtras{display:grid;gap:6px}
+.xtras:empty{display:none}
+.xtra{display:grid;grid-template-columns:70px minmax(0,1fr);gap:var(--s-2);align-items:baseline;padding:0 10px}
+.xtra .val{font-family:var(--font-mono);font-size:var(--fs-14)}
+.xtra .why{font-family:var(--font-sans);font-size:var(--fs-12);color:var(--ink-2)}
 /* verdict block */
 .card{background:var(--surface);border:var(--bw) solid var(--line-2);border-radius:var(--r-2)}
 .verdict{padding:14px var(--s-4) 12px;border-bottom:var(--bw) solid var(--line-3);display:flex;align-items:center;gap:14px;border-radius:var(--r-2) var(--r-2) 0 0}
@@ -769,6 +776,8 @@ a.btn--sec:hover,a.btn--sec:active{color:var(--ink)}
 .dtl-tb td.unit{padding-left:4px}
 .dtl-tb .ok{text-align:right;white-space:nowrap}
 .dtl-tb tr.is-dcr > *{background:var(--surface-2);font-weight:600}
+.dtl-tb tr.is-remark th{font-size:var(--fs-12);font-style:italic}
+.dtl-tb .state{font-weight:500} .dtl-tb .state .notes{display:block;margin-top:2px;font-weight:400;font-size:var(--fs-12);color:var(--ink-2);line-height:1.4}
 .dtl-tb td.dcr.ok{color:var(--ok)} .dtl-tb td.dcr.warn{color:var(--warn)} .dtl-tb td.dcr.bad{color:var(--bad)}
 .dtl-mark{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:var(--fs-11);font-weight:500;line-height:1;border-radius:999px;padding:3px 7px;vertical-align:middle}
 .dtl-mark.ok{background:var(--ok-soft);color:var(--ok);padding:3px}

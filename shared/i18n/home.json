@@ -26,14 +26,14 @@
   "s1t": "Cargá la sección y los esfuerzos",
   "s1d": "Norma, materiales, b × h y las combinaciones con M, V y N. Arranca con un ejemplo resuelto: cambiás lo tuyo y listo.",
   "s2t": "Elegí: que mento la diseñe, o verificá la tuya",
-  "s2d": "mento propone tres armados por grupo (inferior, superior, estribos) con su aprovechamiento. O cargás tus barras y las verificás.",
+  "s2d": "mento propone hasta tres armados por grupo (inferior, superior, estribos) con su aprovechamiento. O cargás tus barras y las verificás.",
   "s3t": "Leé la verificación de un vistazo",
   "s3d": "Cumple / no cumple por flexión y corte, con la combinación que gobierna, la tabla completa por combinación y el cálculo detallado.",
   "s4t": "Llevátelo",
   "s4d": "Memoria en Word para tu informe y un link que guarda el diseño completo para compartirlo o retomarlo.",
   "calcsub": "cada una con las tres normas adentro",
   "beam": "Viga rectangular",
-  "c1": "Flexión y corte con hasta 10 combinaciones, momento positivo y negativo, axil en corte. Diseño de armadura con tres opciones por grupo, o verificación de la tuya.",
+  "c1": "Flexión y corte con hasta 10 combinaciones, momento positivo y negativo, axil en corte. Diseño de armadura con hasta tres opciones por grupo, o verificación de la tuya.",
   "live": "● Disponible",
   "slab": "Losa en una dirección",
   "c2": "Flexión y corte en una franja del ancho que definís.",
@@ -144,7 +144,9 @@
   "c_t": "Python para ingeniería civil",
   "c_tag": "Curso en preparación",
   "c_d": "Un curso de Mehdí para armar tus propias herramientas de cálculo: leer las tablas que exporta tu modelo, verificar una viga contra el libro y generar la memoria en Word, que se rehace sola cuando cambia un dato.",
-  "c_cta": "Seguilo en Me lo dijo un ingeniero →"
+  "c_cta": "Seguilo en Me lo dijo un ingeniero →",
+  "per_side": "por cara",
+  "py_c0": "# un Excel con dos hojas: Sections (las vigas) y Forces (sus esfuerzos)"
  },
  "en": {
   "page_title": "mento · Reinforced concrete calculators",
@@ -173,14 +175,14 @@
   "s1t": "Enter the section and the forces",
   "s1d": "Code, materials, b × h and the combinations with M, V and N. It opens with a solved example: change what is yours and done.",
   "s2t": "Choose: let mento design it, or check yours",
-  "s2d": "mento proposes three layouts per group (bottom, top, stirrups) with their utilization. Or enter your bars and check them.",
+  "s2d": "mento proposes up to three layouts per group (bottom, top, stirrups) with their utilization. Or enter your bars and check them.",
   "s3t": "Read the check at a glance",
   "s3d": "Passes / does not pass for flexure and shear, with the governing combination, the full per-combination table and the detailed calculation.",
   "s4t": "Take it with you",
   "s4d": "A Word report for your submission and a link that stores the whole design to share or resume it.",
   "calcsub": "each one with the three codes inside",
   "beam": "Rectangular beam",
-  "c1": "Flexure and shear with up to 10 combinations, positive and negative moment, axial load in shear. Rebar design with three options per group, or a check of yours.",
+  "c1": "Flexure and shear with up to 10 combinations, positive and negative moment, axial load in shear. Rebar design with up to three options per group, or a check of yours.",
   "live": "● Available",
   "slab": "One-way slab",
   "c2": "Flexure and shear on a strip of the width you define.",
@@ -291,6 +293,8 @@
   "c_t": "Python for civil engineering",
   "c_tag": "Course in the works",
   "c_d": "A course by Mehdí on building your own calculation tools: read the tables your model exports, check a beam against the textbook and generate the Word report, which rebuilds itself when a value changes. In Spanish.",
-  "c_cta": "Follow it on Me lo dijo un ingeniero →"
+  "c_cta": "Follow it on Me lo dijo un ingeniero →",
+  "per_side": "per side",
+  "py_c0": "# an Excel file with two sheets: Sections (the beams) and Forces"
  }
 }
