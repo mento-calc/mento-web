@@ -6,7 +6,7 @@
 // plus unsolicited {type: "progress", step} and {type: "ready", version} on startup.
 
 const PYODIDE_VERSION = "0.29.5";
-const MENTO_VERSION = "1.6.0";
+const MENTO_VERSION = "1.6.1";
 const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 const PYODIDE_PACKAGES = ["numpy", "pandas", "jinja2", "lxml"];
 // mento's own dependencies that Pyodide does not ship (it is installed with deps=False).
