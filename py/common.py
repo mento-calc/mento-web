@@ -10,11 +10,13 @@ import base64
 import contextlib
 import copy
 import io
+import json
 import math
 import os
 import re
 import tempfile
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import docx
@@ -25,10 +27,13 @@ from mento import (
     Concrete_CIRSOC_201_25,
     Concrete_EN_1992_2004,
     Forces,
-    MPa,
     SteelBar,
-    kN,
-    kNm,
+    SummaryInputError,
+    available_languages,
+    bar_designation,
+    bar_diameter,
+    set_language,
+    ureg,
 )
 from mento.verification import warning_category
 
@@ -40,8 +45,6 @@ CONCRETES = {
 # ØMn under ACI and CIRSOC, MRd under EN: the symbol belongs to the code the user picked.
 CAPACITY = {"EN 1992-2004": {"M": "MRd", "V": "VRd"}}
 DEFAULT_CAPACITY = {"M": "ØMn", "V": "ØVn"}
-# The bar catalogue the page offers as alternatives, in mm.
-DIAMETERS = [6, 8, 10, 12, 16, 20, 25]
 
 
 class InputError(ValueError):
@@ -62,26 +65,156 @@ def number(data: dict[str, Any], key: str, *, positive: bool = True) -> float:
     return value
 
 
-def quantity(value: Any, unit: str, precision: int = 2) -> str | None:
-    if value is None:
-        return None
-    return f"{value.to(unit):.{precision}f~P}"
-
-
 def magnitude(value: Any, unit: str, precision: int = 1) -> float | None:
     return None if value is None else round(float(value.to(unit).magnitude), precision)
 
 
+# ------------------------------------------------------------------------ unit systems
+# A US bar is named by its ASTM A615 size, as mento names it: bar_diameter(6) is 0.75 in and
+# bar_designation(0.75 in) is "#6". The table is mento's (mento.bar_sizes), never copied here.
+
+
+@dataclass(frozen=True)
+class Units:
+    """What the page's numbers mean in one system, and how it writes a bar.
+
+    A layout names its bars by what a drawing calls them: the diameter in mm in "si" (16 is Ø16),
+    the ASTM size in "us" (6 is #6). Spacings, and every length the page draws, are in ``length``.
+    """
+
+    name: str
+    length: str  # section sizes, spacings and the drawing
+    cover: str
+    span: str  # a wall's length and height
+    f_c: str
+    f_y: str
+    force: str
+    moment: str
+    labels: dict[str, str]  # how each kind of quantity is written
+    run: float  # spacing units in the length a per-length area counts: 100 cm in a m, 12 in in a ft
+    diameters: tuple[int, ...]  # the bars the page offers as alternatives
+    min_spacing: float  # the tightest mesh the page offers
+
+    @property
+    def us(self) -> bool:
+        return self.name == "us"
+
+    def bar(self, d: float) -> Any:
+        """A layout's bar as mento takes it: a diameter."""
+        if not self.us:
+            return d * ureg.mm
+        try:
+            if int(d) != d:
+                raise ValueError(d)
+            return bar_diameter(int(d))
+        except ValueError:
+            raise InputError("rebar", "bar_size") from None
+
+    def bar_of(self, d_b: Any) -> float:
+        """What a layout calls a bar mento placed: its diameter in mm, or its ASTM size."""
+        if not self.us:
+            return round(float(d_b.to("mm").magnitude), 3)
+        name = bar_designation(d_b)
+        if not name.startswith("#"):  # mento writes a diameter no ASTM size has as Ø0.70"
+            raise ValueError(f"a bar of {name} is no ASTM size")
+        return int(name[1:])
+
+    def size(self, d: float) -> float:
+        """A layout's bar diameter in ``length``, for the drawing."""
+        return round(float(self.bar(d).to(self.length).magnitude), 4)
+
+    def bar_area(self, d: float) -> float:
+        return math.pi * self.size(d) ** 2 / 4
+
+    def bar_name(self, d: float) -> str:
+        return f"#{d:g}" if self.us else f"Ø{d:g}"
+
+    def show(self, value: Any, kind: str, precision: int = 2) -> str | None:
+        """A quantity as the page writes it: ``8.55 cm²``, ``1.32 in²``, ``123.9 kip-ft``."""
+        if value is None:
+            return None
+        unit = {"area": self.labels["area_unit"], "per_length": self.labels["per_length_unit"]}.get(kind)
+        return f"{float(value.to(unit or getattr(self, kind)).magnitude):.{precision}f} {self.labels[kind]}"
+
+
+SI = Units(
+    name="si",
+    length="cm",
+    cover="mm",
+    span="cm",
+    f_c="MPa",
+    f_y="MPa",
+    force="kN",
+    moment="kN*m",
+    labels={
+        "length": "cm",
+        "area": "cm²",
+        "area_unit": "cm**2",
+        "per_length": "cm²/m",
+        "per_length_unit": "cm**2/m",
+        "force": "kN",
+        "moment": "kN·m",
+        "ledger_moment": "kNm",
+    },
+    run=100.0,
+    diameters=(6, 8, 10, 12, 16, 20, 25),
+    min_spacing=10.0,
+)
+US = Units(
+    name="us",
+    length="inch",
+    cover="inch",
+    span="ft",
+    f_c="psi",
+    f_y="ksi",
+    force="kip",
+    moment="kip*ft",
+    labels={
+        "length": "in",
+        "area": "in²",
+        "area_unit": "inch**2",
+        "per_length": "in²/ft",
+        "per_length_unit": "inch**2/ft",
+        "force": "kip",
+        "moment": "kip-ft",
+        "ledger_moment": "kip-ft",
+    },
+    run=12.0,
+    diameters=(3, 4, 5, 6, 7, 8),
+    min_spacing=4.0,
+)
+SYSTEMS = {"si": SI, "us": US}
+# mento reads US customary off f'c in psi, and only ACI 318-19 is written for it.
+US_CODES = ("ACI 318-19",)
+
+
+def units_of(data: dict[str, Any]) -> Units:
+    """The system the page speaks: "si" when a payload names none, as every link from before."""
+    name = data.get("units") or "si"
+    if name not in SYSTEMS:
+        raise InputError("units", "unknown")
+    return SYSTEMS[name]
+
+
 def materials(data: dict[str, Any]) -> tuple[Any, SteelBar]:
+    """f'c and fy, in MPa, or in psi and ksi (a US grade is its fy in ksi: Grade 60)."""
     code = data.get("code")
     if code not in CONCRETES:
         raise InputError("code", "unknown")
+    units = units_of(data)
+    if units.us and code not in US_CODES:
+        raise InputError("code", "units")
     f_c = number(data, "fc")
     f_y = number(data, "fy")
-    return CONCRETES[code](name=f"f'c {f_c:g}", f_c=f_c * MPa), SteelBar(name=f"fy {f_y:g}", f_y=f_y * MPa)
+    concrete = CONCRETES[code](name=f"f'c {f_c:g}", f_c=f_c * ureg(units.f_c))
+    return concrete, SteelBar(name=f"fy {f_y:g}", f_y=f_y * ureg(units.f_y))
 
 
 def build_forces(data: dict[str, Any]) -> list[Forces]:
+    """Factored forces in kN and kNm, or in kip and kip-ft."""
+    units = units_of(data)
+    force, moment = ureg(units.force), ureg(units.moment)
+    system = "imperial" if units.us else "metric"
     forces = []
     for index, row in enumerate(data.get("forces") or []):
         m_y = float(row.get("M_y") or 0)
@@ -89,7 +222,8 @@ def build_forces(data: dict[str, Any]) -> list[Forces]:
         n_x = float(row.get("N_x") or 0)
         if m_y == 0 and v_z == 0 and n_x == 0:
             continue
-        forces.append(Forces(label=str(row.get("label") or f"C{index + 1}"), M_y=m_y * kNm, V_z=v_z * kN, N_x=n_x * kN))
+        label = str(row.get("label") or f"C{index + 1}")
+        forces.append(Forces(label=label, M_y=m_y * moment, V_z=v_z * force, N_x=n_x * force, unit_system=system))
     if not forces:
         raise InputError("forces", "empty")
     return forces
@@ -227,50 +361,54 @@ def spacing_options(
     chosen: dict[str, Any],
     limit: int,
     max_spacing: float,
-    min_spacing: float = 10.0,
+    units: Units,
 ) -> list[dict[str, Any]]:
-    """Mesh layouts of one bar diameter at a spacing, mento's own pick first.
+    """Mesh layouts of one bar at a spacing, mento's own pick first.
 
-    mento offers no alternatives for a wall's mesh, so they are built here: for each diameter, the widest
-    whole-centimetre spacing that still provides ``area_required`` (cm²/m), capped by the code's
-    limit. Every one of them is then checked by mento like any other reinforcement.
+    mento offers no alternatives for a wall's mesh, so they are built here: for each bar, the widest
+    whole-centimetre (or whole-inch) spacing that still provides ``area_required`` (cm²/m or
+    in²/ft), capped by the code's limit. Every one of them is then checked by mento like any other
+    reinforcement.
     """
     layouts = [chosen] if chosen else []
-    # One alternative per diameter: the same bar at a slightly different spacing is not a choice.
+    # One alternative per bar: the same bar at a slightly different spacing is not a choice.
     seen_diameters = {(chosen or {}).get("d")}
-    for diameter in DIAMETERS:
-        if diameter in seen_diameters:
+    for diameter in units.diameters:
+        if diameter in seen_diameters or area_required <= 0:
             continue
-        bar = math.pi * diameter**2 / 4 / 100  # cm² of one bar
-        if area_required <= 0:
-            continue
-        spacing = math.floor(min(bar / area_required * 100, max_spacing))
-        if spacing < min_spacing:
+        spacing = math.floor(min(units.bar_area(diameter) / area_required * units.run, max_spacing))
+        if spacing < units.min_spacing:
             continue
         seen_diameters.add(diameter)
         layouts.append({"d": float(diameter), "s": float(spacing)})
-    ordered = layouts[:1] + sorted(layouts[1:], key=lambda item: abs(item["d"] - (chosen or {}).get("d", 10)))
+    middle = units.diameters[2]
+    ordered = layouts[:1] + sorted(layouts[1:], key=lambda item: abs(item["d"] - (chosen or {}).get("d", middle)))
     return ordered[:limit]
 
 
 def signature(layout: dict[str, Any]) -> str:
     """Short, stable name of a layout: what the URL keeps and what re-picks it after a recalc."""
-    if "s" in layout and "n" in layout:  # stirrups: count, diameter and spacing
+    if "s" in layout and "n" in layout:  # stirrups: legs, diameter and spacing
         return f"{layout['n']:g}x{layout['d']:g}@{layout['s']:g}"
     if "s" in layout:  # a mesh: diameter at a spacing
         return f"{layout['d']:g}@{layout['s']:g}"
     return "+".join(f"{layout[f'n{i}']:g}x{layout[f'd{i}']:g}" for i in range(1, 5) if layout.get(f"n{i}"))
 
 
-def mesh_bars(layout: dict[str, Any]) -> str:
-    return "" if not layout else f"Ø{layout['d']:g} c/{layout['s']:g} cm"
-
-
-def mesh_area(layout: dict[str, Any], curtains: int = 1) -> str:
-    """The steel a mesh puts in, per metre. A wall carries one curtain on each face."""
+def mesh_bars(layout: dict[str, Any], units: Units) -> str:
+    """``Ø10c/15cm``, or ``#4@12in`` as a US drawing calls it: compact, as a drawing labels it."""
     if not layout:
         return ""
-    return f"{curtains * math.pi * layout['d'] ** 2 / 4 / 100 * (100 / layout['s']):.2f} cm²/m"
+    if units.us:
+        return f"{units.bar_name(layout['d'])}@{layout['s']:g}in"
+    return f"{units.bar_name(layout['d'])}c/{layout['s']:g}cm"
+
+
+def mesh_area(layout: dict[str, Any], units: Units, curtains: int = 1) -> str:
+    """The steel a mesh puts in, per metre or per foot. A wall carries one curtain on each face."""
+    if not layout:
+        return ""
+    return f"{curtains * units.bar_area(layout['d']) * units.run / layout['s']:.2f} {units.labels['per_length']}"
 
 
 # ------------------------------------------------------------------------ verdict and notices
@@ -281,21 +419,26 @@ def captured_notices(captured: list[Any]) -> list[dict[str, Any]]:
     return [{"code": "mento", "severity": "warn", "values": {"message": str(item.message)}} for item in captured]
 
 
+# What each of mento's warning categories (``mento.verification.warning_category``) is to the page.
+# A strength the section lacks ("resistance") or a limit of the code it misses ("failed": spacing,
+# bars that do not fit, a cage that cannot be detailed) fails the element, whatever its DCR. A check
+# mento leaves pending is flagged and fails nothing, and a note only informs (the skin a deep beam
+# requires, which mento lays out). A code mento has not classed is pending.
+SEVERITY = {"resistance": "bad", "failed": "bad", "pending": "warn", "informative": "info"}
+
+
 def warning_notices(element: Any, captured: list[Any]) -> list[dict[str, Any]]:
     """What the page flags, as mento judges it: its Python warnings, then its ``DesignWarning``s.
 
-    mento sorts them with ``warning_category``. A limit of the strength or of the detailing the
-    section misses (minimum or maximum steel, spacing, bars that do not fit, a cage that cannot be
-    built) fails the element, whatever its DCR. A note (skin steel to place) or a check left pending
-    (the bracing of compression bars under EN) is listed and does not fail it, as in mento's
-    summaries. ``code`` is mento's stable one; the page shows ``message``, which mento writes in the
+    ``severity`` is the page's reading of mento's category (``SEVERITY``): only "bad" fails the
+    element. ``code`` is mento's stable one; the page shows ``message``, which mento writes in the
     language set with ``mento.set_language``."""
     notices = captured_notices(captured)
     for warning in element.warnings:
         notices.append(
             {
                 "code": warning.code,
-                "severity": "bad" if warning_category(warning.code) in ("resistance", "failed") else "warn",
+                "severity": SEVERITY.get(warning_category(warning.code), "warn"),
                 "message": warning.message,
                 "values": {
                     "face": warning.face,
@@ -307,7 +450,7 @@ def warning_notices(element: Any, captured: list[Any]) -> list[dict[str, Any]]:
     return notices
 
 
-def flexure_rows(element: Any, forces: list[Any], code: str) -> list[dict[str, Any]]:
+def flexure_rows(element: Any, forces: list[Any], code: str, units: Units) -> list[dict[str, Any]]:
     """The bottom and top flexure rows of the ledger, from the last check.
 
     Each face shows the combination with its largest DCR, but a face complies only if every
@@ -320,7 +463,7 @@ def flexure_rows(element: Any, forces: list[Any], code: str) -> list[dict[str, A
     for key, name in (("flexure_bottom", "bottom"), ("flexure_top", "top")):
         governing = max(checks, key=lambda check, name=name: getattr(check, name).DCR)
         check = getattr(governing, name)
-        moment = float(demands[governing.label].M_y.to("kN*m").magnitude)
+        moment = float(demands[governing.label].M_y.to(units.moment).magnitude)
         loaded = moment > 0 if name == "bottom" else moment < 0
         rows.append(
             {
@@ -329,16 +472,16 @@ def flexure_rows(element: Any, forces: list[Any], code: str) -> list[dict[str, A
                 "complies": all(getattr(each, name).complies for each in checks),
                 "symbol": symbols["M"],
                 "demand_symbol": "Mu",
-                "capacity": magnitude(check.M_capacity, "kN*m"),
+                "capacity": magnitude(check.M_capacity, units.moment),
                 "demand": round(abs(moment), 1) if loaded else None,
-                "unit": "kNm",
+                "unit": units.labels["ledger_moment"],
                 "combo": governing.label if loaded else None,
             }
         )
     return rows
 
 
-def shear_row(element: Any, forces: list[Any], code: str) -> dict[str, Any]:
+def shear_row(element: Any, forces: list[Any], code: str, units: Units) -> dict[str, Any]:
     symbols = CAPACITY.get(code, DEFAULT_CAPACITY)
     demands = {force.label: force for force in forces}
     shear = max(element.shear_checks, key=lambda check: check.DCR)
@@ -347,9 +490,9 @@ def shear_row(element: Any, forces: list[Any], code: str) -> dict[str, Any]:
         "dcr": round(float(shear.DCR), 3),
         "symbol": symbols["V"],
         "demand_symbol": "Vu",
-        "capacity": magnitude(shear.V_capacity, "kN"),
-        "demand": round(abs(float(demands[shear.label].V_z.to("kN").magnitude)), 1),
-        "unit": "kN",
+        "capacity": magnitude(shear.V_capacity, units.force),
+        "demand": round(abs(float(demands[shear.label].V_z.to(units.force).magnitude)), 1),
+        "unit": units.labels["force"],
         "combo": shear.label,
     }
 
@@ -428,3 +571,51 @@ def write_report(writers: list[Callable[[], Any]], name: str) -> str:
 def safe_label(label: str) -> str:
     """mento puts the label in the names of the files it writes, so it has to be a valid one."""
     return "".join("_" if char in r'\/:*?"<>|' else char for char in label)
+
+
+# ------------------------------------------------------------------------ the list of saved sections
+# What every calculator's list of saved sections hands over: one Excel that mento's summary of that
+# element writes itself (``from_nodes`` and ``to_excel``) and reads back with ``from_excel``. It has
+# two sheets: Sections, a row per section with the reinforcement of both faces, and Forces, a row per
+# combination. Nothing of that format is copied here.
+
+
+def shared_materials(items: list[dict[str, Any]]) -> Units:
+    """The system of a list of saved sections, once they all share it and their materials: a summary
+    takes one concrete and one steel. ``InputError`` on ``list`` otherwise, or when the list is empty."""
+    if not items:
+        raise InputError("list", "empty")
+    first = items[0]
+    for other in items[1:]:
+        if (other.get("units") or "si") != (first.get("units") or "si"):
+            raise InputError("list", "units")
+        if any(other.get(key) != first.get(key) for key in ("code", "fc", "fy")):
+            raise InputError("list", "materials")
+    materials(first)  # the code, fc and fy are ones mento knows
+    return units_of(first)
+
+
+def summary_excel(
+    summary: Any, items: list[dict[str, Any]], node: Callable[[dict[str, Any]], Any], name: str, lang: str
+) -> str:
+    """The saved sections as one Excel, ``{"ok": true, "name", "base64"}``. Never raises.
+
+    ``summary`` is mento's summary of the element (``BeamSummary``...) and ``node`` builds the
+    ``Node`` of one saved section, reinforced as the page had it. mento rebuilds each section from
+    the row it writes, so the file it reads back checks as the page did. What a summary cannot
+    hold (two combinations of a section under one name) comes back in mento's own words, in the
+    language of the page."""
+    set_language(lang if lang in available_languages() else "en")
+    try:
+        shared_materials(items)
+        concrete, steel = materials(items[0])
+        out = io.BytesIO()
+        summary.from_nodes(concrete, steel, [node(item) for item in items]).to_excel(out)
+        result = {"ok": True, "name": name, "base64": base64.b64encode(out.getvalue()).decode("ascii")}
+    except InputError as error:
+        result = {"ok": False, "kind": "input", "field": error.field, "message": str(error)}
+    except SummaryInputError as error:
+        result = {"ok": False, "kind": "summary", "message": error.message}
+    except Exception as error:  # noqa: BLE001 - everything must reach the page as JSON
+        result = {"ok": False, "kind": "mento", "message": f"{type(error).__name__}: {error}"}
+    return json.dumps(result)

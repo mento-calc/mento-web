@@ -13,7 +13,7 @@ from typing import Any
 
 import common
 import mento
-from mento import Node, OneWaySlab, cm, mm
+from mento import Node, OneWaySlab, OneWaySlabSummary, ureg
 
 # The worked example every visitor opens: a 20 cm slab spanning about 5 m, with a support moment.
 EXAMPLE: dict[str, Any] = {
@@ -31,29 +31,44 @@ EXAMPLE: dict[str, Any] = {
         {"label": "1.2D+1.6L (apoyo)", "M_y": -22, "V_z": 45, "N_x": 0},
     ],
 }
+# The same slab in US customary units: 8 in thick, a 12 in strip (one foot), ACI 318-19.
+EXAMPLE_US: dict[str, Any] = {
+    "code": "ACI 318-19",
+    "units": "us",
+    "lang": "en",
+    "mode": "design",
+    "label": "S-101",
+    "fc": 4000,
+    "fy": 60,
+    "width": 12,
+    "height": 8,
+    "cover": 0.75,
+    "forces": [
+        {"label": "1.2D+1.6L", "M_y": 7.5, "V_z": 2.6, "N_x": 0},
+        {"label": "1.2D+1.6L (support)", "M_y": -5, "V_z": 3.1, "N_x": 0},
+    ],
+}
 GROUPS = ("bot", "top")
 
 
 def _build(data: dict[str, Any]) -> OneWaySlab:
     concrete, steel = common.materials(data)
+    units = common.units_of(data)
     return OneWaySlab(
         label=common.label_of(data, "L1"),
         concrete=concrete,
         steel_bar=steel,
-        width=common.number(data, "width") * cm,
-        height=common.number(data, "height") * cm,
-        c_c=common.number(data, "cover") * mm,
+        width=common.number(data, "width") * ureg(units.length),
+        height=common.number(data, "height") * ureg(units.length),
+        c_c=common.number(data, "cover") * ureg(units.cover),
     )
 
 
-def _layer_layout(layers: Any) -> dict[str, Any]:
-    """A slab face is one diameter at one spacing, which is how it is drawn and ordered."""
+def _layer_layout(layers: Any, units: common.Units) -> dict[str, Any]:
+    """A slab face is one bar at one spacing, which is how it is drawn and ordered."""
     for layer in layers:
         if layer.n and layer.s is not None:
-            return {
-                "d": round(float(layer.d_b.to("mm").magnitude), 3),
-                "s": round(float(layer.s.to("cm").magnitude), 3),
-            }
+            return {"d": units.bar_of(layer.d_b), "s": round(float(layer.s.to(units.length).magnitude), 3)}
     return {}
 
 
@@ -69,20 +84,26 @@ def _rebar_layouts(rebar: dict[str, Any]) -> dict[str, Any]:
     return layouts
 
 
-def _apply(slab: OneWaySlab, layouts: dict[str, Any]) -> None:
+def _apply(slab: OneWaySlab, layouts: dict[str, Any], units: common.Units) -> None:
     bottom, top = layouts.get("bot") or {}, layouts.get("top") or {}
     if bottom:
-        slab.set_slab_longitudinal_rebar_bot(d_b1=bottom["d"] * mm, s_b1=bottom["s"] * cm)
+        slab.set_slab_longitudinal_rebar_bot(d_b1=units.bar(bottom["d"]), s_b1=bottom["s"] * ureg(units.length))
     if top:
-        slab.set_slab_longitudinal_rebar_top(d_b1=top["d"] * mm, s_b1=top["s"] * cm)
+        slab.set_slab_longitudinal_rebar_top(d_b1=units.bar(top["d"]), s_b1=top["s"] * ureg(units.length))
+
+
+def _reinforced(data: dict[str, Any], forces: list[Any], layouts: dict[str, Any]) -> tuple[OneWaySlab, Node]:
+    """A fresh strip with that mesh in it, under its combinations."""
+    slab = _build(data)
+    node = Node(section=slab, forces=forces)
+    _apply(slab, layouts, common.units_of(data))
+    return slab, node
 
 
 def _checked(data: dict[str, Any], forces: list[Any], layouts: dict[str, Any]) -> tuple[OneWaySlab, Node]:
     """A fresh strip with that mesh in it, checked. Fresh because designing or checking leaves
     state behind on the section."""
-    slab = _build(data)
-    node = Node(section=slab, forces=forces)
-    _apply(slab, layouts)
+    slab, node = _reinforced(data, forces, layouts)
     node.check()
     return slab, node
 
@@ -96,27 +117,29 @@ def _state(slab: OneWaySlab, group: str) -> tuple[float, bool]:
     return round(float(face.DCR), 3), bool(face.complies)
 
 
-def _per_metre(area: Any, width: float) -> str:
-    """A strip's steel per metre of slab: mento's area counts width / s bars, 6.67 for Ø10/15."""
-    return f"{float(area.to('cm**2').magnitude) * 100 / width:.2f} cm²/m"
+def _per_length(area: Any, width: float, units: common.Units) -> str:
+    """A strip's steel per metre (or foot) of slab: mento's area counts width / s bars, 6.67 for Ø10/15."""
+    per_strip = float(area.to(units.labels["area_unit"]).magnitude)
+    return f"{per_strip * units.run / width:.2f} {units.labels['per_length']}"
 
 
 def _options(data: dict[str, Any], slab: OneWaySlab) -> dict[str, Any]:
     """The meshes mento's design offers for each face, the applied one first. The alternatives are
     the ones the finished strip passes with, so there may be fewer than asked for."""
     width = common.number(data, "width")
+    units = common.units_of(data)
     options: dict[str, Any] = {}
     for group in GROUPS:
         face = _face(slab, group)
         options[group] = []
         for option in face.options or [face]:
-            layout = _layer_layout(option.layers)
+            layout = _layer_layout(option.layers, units)
             if not layout or any(known["layout"] == layout for known in options[group]):
                 continue
             options[group].append(
                 {
-                    "bars": common.mesh_bars(layout),
-                    "area": _per_metre(option.A_s, width),
+                    "bars": common.mesh_bars(layout, units),
+                    "area": _per_length(option.A_s, width, units),
                     "placed": option.n_bars_placed,
                     "signature": common.signature(layout),
                     "layout": layout,
@@ -125,19 +148,19 @@ def _options(data: dict[str, Any], slab: OneWaySlab) -> dict[str, Any]:
     return options
 
 
-def _section(slab: OneWaySlab, layouts: dict[str, Any]) -> dict[str, Any]:
-    """The strip in cm, with the bars of each face placed along it, for the page to draw: as many
-    as mento places (``n_placed``, the whole bars that lay the spacing out across the strip)."""
-    width = float(slab.width.to("cm").magnitude)
-    height = float(slab.height.to("cm").magnitude)
-    cover = float(slab.c_c.to("cm").magnitude)
+def _section(slab: OneWaySlab, layouts: dict[str, Any], units: common.Units) -> dict[str, Any]:
+    """The strip in cm (or in), with the bars of each face placed along it, for the page to draw: as
+    many as mento places (``n_placed``, the whole bars that lay the spacing out across the strip)."""
+    width = float(slab.width.to(units.length).magnitude)
+    height = float(slab.height.to(units.length).magnitude)
+    cover = float(slab.c_c.to(units.length).magnitude)
     reinforcement = slab.reinforcement
     bars: list[dict[str, float]] = []
     for group, bottom in (("bot", True), ("top", False)):
         layout = layouts.get(group) or {}
         if not layout:
             continue
-        diameter = layout["d"] / 10
+        diameter = units.size(layout["d"])
         spacing = layout["s"]
         count = (reinforcement.bottom if bottom else reinforcement.top).n_bars_placed
         start = (width - (count - 1) * spacing) / 2
@@ -146,13 +169,14 @@ def _section(slab: OneWaySlab, layouts: dict[str, Any]) -> dict[str, Any]:
             x = start + index * spacing
             if -1e-6 <= x <= width + 1e-6:
                 bars.append({"x": round(x, 3), "y": round(y, 3), "d": round(diameter, 3)})
-    return {"width": width, "height": height, "cover": cover, "bars": bars}
+    return {"width": width, "height": height, "cover": cover, "unit": units.labels["length"], "bars": bars}
 
 
 def _solve(data: dict[str, Any]) -> dict[str, Any]:
     lang = data.get("lang", "en")
     mento.set_language(lang if lang in mento.available_languages() else "en")
     forces = common.build_forces(data)
+    units = common.units_of(data)
     check_mode = data.get("mode") == "check"
     options: dict[str, Any] = {}
     selected: dict[str, int] = {}
@@ -187,19 +211,25 @@ def _solve(data: dict[str, Any]) -> dict[str, Any]:
         "ok": True,
         "version": mento.__version__,
         "code": data["code"],
-        "rebar": {group: common.mesh_bars(layout) for group, layout in layouts.items()},
+        "units": units.name,
+        "rebar": {group: common.mesh_bars(layout, units) for group, layout in layouts.items()},
         # a metre of Ø10/15 is 6.67 bars and 5.24 cm²; 7 of them are placed
         "placed": {group: face.n_bars_placed for group, face in (("bot", placed.bottom), ("top", placed.top))},
-        "area": {group: _per_metre(face.A_s, width) for group, face in (("bot", placed.bottom), ("top", placed.top))},
+        "area": {
+            group: _per_length(face.A_s, width, units) for group, face in (("bot", placed.bottom), ("top", placed.top))
+        },
         "layouts": layouts,
         "options": options,
         "selected": selected,
         "changed": changed,
         "complies": bool(slab.flexure_design.complies) and slab.shear_design.DCR <= 1,
-        "ledger": [*common.flexure_rows(slab, forces, data["code"]), common.shear_row(slab, forces, data["code"])],
+        "ledger": [
+            *common.flexure_rows(slab, forces, data["code"], units),
+            common.shear_row(slab, forces, data["code"], units),
+        ],
         "notices": common.warning_notices(node, list(captured)),
         "tables": {"flexure": common.table(flexure_table), "shear": common.table(shear_table)},
-        "section": _section(slab, layouts),
+        "section": _section(slab, layouts, units),
         **detailed,
     }
 
@@ -233,3 +263,22 @@ def report(payload: str) -> str:
     slab, node = _checked(data, forces, layouts)
     content = common.write_report([node.flexure_results_detailed_doc, node.shear_results_detailed_doc], slab.label)
     return json.dumps([{"name": f"{slab.label} - {data['code']}.docx", "base64": content}])
+
+
+# ------------------------------------------------------------------------ the list of saved slabs
+# Every slab the visitor saved, in the Excel ``OneWaySlabSummary.from_excel`` reads: a row per slab
+# in Sections, with the diameter and spacing of both faces, and a row per combination in Forces.
+# mento writes it (common.summary_excel), from each strip as the page checked it.
+
+
+def _saved(data: dict[str, Any]) -> Node:
+    """A saved slab: what the page sent, with the layouts it got back."""
+    return _reinforced(data, common.build_forces(data), data.get("layouts") or {})[1]
+
+
+def summary(payload: str) -> str:
+    """The saved slabs as one Excel. Never raises: errors come back as ``{"ok": false}``."""
+    data = json.loads(payload)
+    return common.summary_excel(
+        OneWaySlabSummary, data.get("slabs") or [], _saved, "slabs.xlsx", data.get("lang", "en")
+    )

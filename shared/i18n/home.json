@@ -12,7 +12,7 @@
   "f_free": "Gratis",
   "f_test": "Testeado contra ejemplos publicados",
   "f_noreg": "Sin registro",
-  "f_lang": "Español e inglés",
+  "f_lang": "Español e inglés, SI y US",
   "drawing": "Sección · a escala",
   "propose_s": "mento propone",
   "bot_l": "inferior",
@@ -78,6 +78,7 @@
   "feedback": "Contanos qué te pareció",
   "lang_label": "Idioma",
   "fig_beam": "Sección 20 × 60 con su armadura",
+  "fig_beam_us": "Sección 12 × 24 in con su armadura",
   "page_desc": "Diseñá la armadura o verificá la tuya: vigas, losas y tabiques de hormigón armado según ACI 318-19, CIRSOC 201-25 y EN 1992. Gratis, en tu navegador.",
   "tests_t": "tests contra ejemplos publicados",
   "soon": "Próximamente",
@@ -143,7 +144,9 @@
   "c_t": "Python para ingeniería civil",
   "c_tag": "Curso en preparación",
   "c_d": "Un curso de Mehdí para armar tus propias herramientas de cálculo: leer las tablas que exporta tu modelo, verificar una viga contra el libro y generar la memoria en Word, que se rehace sola cuando cambia un dato.",
-  "c_cta": "Seguilo en Me lo dijo un ingeniero →"
+  "c_cta": "Seguilo en Me lo dijo un ingeniero →",
+  "per_side": "por cara",
+  "py_c0": "# un Excel con dos hojas: Sections (las vigas) y Forces (sus esfuerzos)"
  },
  "en": {
   "page_title": "mento · Reinforced concrete calculators",
@@ -158,7 +161,7 @@
   "f_free": "Free",
   "f_test": "Tested against published examples",
   "f_noreg": "No sign-up",
-  "f_lang": "Spanish and English",
+  "f_lang": "Spanish and English, SI and US units",
   "drawing": "Section · to scale",
   "propose_s": "mento proposes",
   "bot_l": "bottom",
@@ -224,6 +227,7 @@
   "feedback": "Tell us what you think",
   "lang_label": "Language",
   "fig_beam": "20 × 60 section with its reinforcement",
+  "fig_beam_us": "12 × 24 in section with its reinforcement",
   "page_desc": "Design the reinforcement or check yours: reinforced concrete beams, slabs and walls to ACI 318-19, CIRSOC 201-25 and EN 1992. Free, in your browser.",
   "tests_t": "tests against published examples",
   "soon": "Coming soon",
@@ -289,6 +293,8 @@
   "c_t": "Python for civil engineering",
   "c_tag": "Course in the works",
   "c_d": "A course by Mehdí on building your own calculation tools: read the tables your model exports, check a beam against the textbook and generate the Word report, which rebuilds itself when a value changes. In Spanish.",
-  "c_cta": "Follow it on Me lo dijo un ingeniero →"
+  "c_cta": "Follow it on Me lo dijo un ingeniero →",
+  "per_side": "per side",
+  "py_c0": "# an Excel file with two sheets: Sections (the beams) and Forces"
  }
 }

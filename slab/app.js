@@ -1,6 +1,6 @@
 // The one-way slab: a strip reinforced with a diameter at a spacing on each face.
 // Everything it shares with the other calculators lives in shared/calculator.js.
-import { CONCRETE_CLASS, dimBelow, dimLeft, num, start } from "../shared/calculator.js";
+import { CONCRETE_CLASS, dimBelow, dimLeft, fmt, num, pyUnits, start } from "../shared/calculator.js";
 
 const EXAMPLE = {
   code: "CIRSOC 201-25", fc: 25, fy: 420, width: 100, height: 20, cover: 20, label: "L-101", mode: "design",
@@ -11,16 +11,26 @@ const EXAMPLE = {
   rebar: { bot: { d: 10, s: 13 }, top: { d: 12, s: 25 } },
   choice: {},
 };
+// The same slab for the US (py/slab.py EXAMPLE_US): 8 in thick, a one-foot strip, ACI 318-19.
+const EXAMPLE_US = {
+  code: "ACI 318-19", fc: 4000, fy: 60, width: 12, height: 8, cover: 0.75, label: "S-101", mode: "design",
+  forces: [
+    { label: "1.2D+1.6L", M_y: 7.5, V_z: 2.6, N_x: 0 },
+    { label: "1.2D+1.6L (support)", M_y: -5, V_z: 3.1, N_x: 0 },
+  ],
+  rebar: { bot: { d: 3, s: 4 }, top: { d: 3, s: 6 } },
+  choice: {},
+};
 
 // The strip, drawn to scale: the bars of each face along it, seen in section.
-function drawing(result, t, phone) {
+function drawing(result, t, phone, U) {
   const { width, height, cover, bars } = result.section;
   const box = phone ? { w: 343, h: 210 } : { w: 556, h: 300 };
   // Dimension lines need their room on the left and below, the frame label its band on top;
   // the "w × h" note stays as the figure's description.
   const note = `${width} × ${height}`;
   const room = { left: 60, right: 24 };
-  const scale = Math.min((box.w - room.left - room.right) / width, (box.h - 120) / height, 4);
+  const scale = Math.min((box.w - room.left - room.right) / width, (box.h - 120) / height, 4 * U.scale);
   const [w, h] = [width * scale, height * scale];
   const x0 = room.left + (box.w - room.left - room.right - w) / 2;
   // centred, but never up into the band of the frame's label and Copiá button
@@ -33,14 +43,15 @@ function drawing(result, t, phone) {
     parts.push(`<circle class="dw-bar" cx="${(x0 + bar.x * scale).toFixed(2)}"`
       + ` cy="${(y0 + (height - bar.y) * scale).toFixed(2)}" r="${Math.max(1.8, (bar.d / 2) * scale).toFixed(2)}"/>`);
   }
-  // Ø10 c/15 cm is 6.67 bars a metre, and 5.24 cm²/m, but 7 bars are placed: mento counts both
+  // Ø10c/15cm is 6.67 bars a metre, and 5.24 cm²/m, but 7 bars are placed: mento counts both
   const label = (group) => [result.rebar[group], result.placed && t.bars_n.replace("{n}", result.placed[group]), result.area?.[group]]
     .filter(Boolean).join(" · ");
   if (result.rebar.top) parts.push(`<text class="dw-label" x="${x0}" y="${y0 - 10}">${label("top")}</text>`);
   if (result.rebar.bot) parts.push(`<text class="dw-label" x="${x0}" y="${y0 + h + 22}">${label("bot")}</text>`);
   // dimension lines: the thickness on the left, the width under the bottom label (its extension
   // lines start below the label, so they never cross it)
-  parts.push(dimLeft(y0, y0 + h, x0, x0 - 14, `${height} cm`), dimBelow(x0, x0 + w, y0 + h + 26, y0 + h + 38, `${width} cm`));
+  parts.push(dimLeft(y0, y0 + h, x0, x0 - 14, `${fmt(height)} ${U.len}`),
+    dimBelow(x0, x0 + w, y0 + h + 26, y0 + h + 38, `${fmt(width)} ${U.len}`));
   const description = t.fig_section.replace("{section}", note)
     .replace("{bars}", [result.rebar.bot, result.rebar.top].filter(Boolean).join(", "));
   return `<svg viewBox="0 0 ${box.w} ${box.h}" width="${box.w}" height="${box.h}" style="max-width:100%;height:auto"`
@@ -49,18 +60,19 @@ function drawing(result, t, phone) {
 
 function python(state, result) {
   const concrete = CONCRETE_CLASS[state.code];
+  const P = pyUnits(state.units);
   const lines = [
     `from mento import ${concrete}, SteelBar, OneWaySlab, Node, Forces`,
-    "from mento import MPa, cm, mm, kN, kNm",
+    P.imports,
     "",
-    `concrete = ${concrete}(name="${state.code}", f_c=${state.fc} * MPa)`,
-    `steel = SteelBar(name="fy ${state.fy}", f_y=${state.fy} * MPa)`,
+    `concrete = ${concrete}(name="${state.code}", f_c=${P.fc(state.fc)})`,
+    `steel = SteelBar(name="fy ${state.fy}", f_y=${P.fy(state.fy)})`,
     `slab = OneWaySlab(label="${state.label}", concrete=concrete, steel_bar=steel,`,
-    `                  width=${num(state.width)} * cm, height=${num(state.height)} * cm, c_c=${num(state.cover)} * mm)`,
+    `                  width=${P.len(num(state.width))}, height=${P.len(num(state.height))}, c_c=${P.cov(num(state.cover))})`,
     "forces = [",
     ...state.forces.filter((force) => num(force.M_y) || num(force.V_z) || num(force.N_x)).map((force) =>
-      `    Forces(label="${force.label}", M_y=${num(force.M_y) || 0} * kNm, V_z=${num(force.V_z) || 0} * kN,`
-      + ` N_x=${num(force.N_x) || 0} * kN),`),
+      `    Forces(label="${force.label}", M_y=${P.moment(num(force.M_y) || 0)}, V_z=${P.force(num(force.V_z) || 0)},`
+      + ` N_x=${P.force(num(force.N_x) || 0)}),`),
     "]",
     "node = Node(section=slab, forces=forces)",
     "",
@@ -70,8 +82,8 @@ function python(state, result) {
     lines.push("# Let mento design the reinforcement", "node.design()");
   } else if (layouts) {
     lines.push("# Set the reinforcement");
-    if (layouts.bot) lines.push(`slab.set_slab_longitudinal_rebar_bot(d_b1=${layouts.bot.d} * mm, s_b1=${layouts.bot.s} * cm)`);
-    if (layouts.top) lines.push(`slab.set_slab_longitudinal_rebar_top(d_b1=${layouts.top.d} * mm, s_b1=${layouts.top.s} * cm)`);
+    if (layouts.bot) lines.push(`slab.set_slab_longitudinal_rebar_bot(d_b1=${P.bar(layouts.bot.d)}, s_b1=${P.len(layouts.bot.s)})`);
+    if (layouts.top) lines.push(`slab.set_slab_longitudinal_rebar_top(d_b1=${P.bar(layouts.top.d)}, s_b1=${P.len(layouts.top.s)})`);
   }
   return lines.concat([
     "",
@@ -103,11 +115,13 @@ const barsFromLayouts = (layouts) => ({
 
 start({
   module: "slab",
+  collection: { key: "slabs", fallback: "L1" },
   example: EXAMPLE,
+  exampleUS: EXAMPLE_US,
   numbers: [
-    { id: "width" },
-    { id: "height", rule: (state, number) => (number(state.height) <= 2 * (number(state.cover) / 10) ? "err_height" : "") },
-    { id: "cover" },
+    { id: "width", unit: "strip" },
+    { id: "height", unit: "len", rule: (state, number, U) => (number(state.height) <= 2 * U.cover(number(state.cover)) ? "err_height" : "") },
+    { id: "cover", unit: "cov" },
   ],
   forces: ["M_y", "V_z", "N_x"],
   groups: [{ key: "bot", label: "bot" }, { key: "top", label: "top" }],
@@ -115,7 +129,7 @@ start({
   tables: ["flexure", "shear"],
   drawing,
   // the section as typed, before the first result: its bars come in with it
-  preview: (state) => ({ section: { width: num(state.width), height: num(state.height), cover: num(state.cover) / 10, bars: [] }, rebar: {} }),
+  preview: (state, U) => ({ section: { width: num(state.width), height: num(state.height), cover: U.cover(num(state.cover)), bars: [] }, rebar: {} }),
   python,
   barsFromLayouts,
 });
