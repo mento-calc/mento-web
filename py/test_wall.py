@@ -9,7 +9,7 @@ import pytest
 
 import wall
 
-CODES = ["ACI 318-19", "CIRSOC 201-25"]  # EN has no wall hooks in mento 1.3.0
+CODES = ["ACI 318-19", "CIRSOC 201-25", "EN 1992-2004"]
 
 
 def solve(**changes):
@@ -22,6 +22,18 @@ def test_design_passes_for_every_code_that_checks_walls(code):
     assert result["ok"], result
     assert result["rebar"]["horizontal"].startswith("Ø")
     assert result["ledger"][0]["dcr"] <= 1
+
+
+def test_en_writes_its_own_symbols_and_checks_what_the_user_typed():
+    result = solve(
+        code="EN 1992-2004",
+        fy=500,
+        mode="check",
+        rebar={"horizontal": {"d": 10, "s": 15}, "vertical": {"d": 10, "s": 20}},
+    )
+    assert result["ok"], result
+    assert result["ledger"][0]["symbol"] == "VRd"
+    assert result["tables"]["shear"]["columns"][-1] == "DCR" and "Ash" in result["tables"]["shear"]["columns"]
 
 
 def test_the_worked_example_is_used_between_07_and_09():

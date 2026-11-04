@@ -60,7 +60,6 @@
       <div class="hd"><span class="eyebrow" id="hero-propose" data-i18n="propose_s">mento propone</span><span class="grp-name" data-i18n="bot_l">inferior</span></div>
       <label class="opt" data-sig="2x16+1x12" data-mid="10,3.7,1.2"><input type="radio" name="hero-bot" checked><span class="val" data-hero="opt1">2Ø16 + 1Ø12</span><span class="area">5.15 cm²</span><span class="dcr ok" data-hero="opt1_dcr">0.88</span></label>
       <label class="opt" data-sig="2x16+1x16" data-mid="10,3.9,1.6"><input type="radio" name="hero-bot"><span class="val" data-hero="opt2">3Ø16</span><span class="area">6.03 cm²</span><span class="dcr ok" data-hero="opt2_dcr">0.76</span></label>
-      <label class="opt" data-sig="2x16+2x12" data-mid="7.9,3.7,1.2;12.1,3.7,1.2"><input type="radio" name="hero-bot"><span class="val" data-hero="opt3">2Ø16 + 2Ø12</span><span class="area">6.28 cm²</span><span class="dcr ok" data-hero="opt3_dcr">0.73</span></label>
       <a class="more" id="hero-check" href="beam/" data-i18n="ortry">o cargá la tuya y verificala →</a>
     </div>
     <div class="viz-verdict">
@@ -74,7 +73,7 @@
 <section class="steps-band"><div class="eyebrow" data-i18n="how">Cómo funciona</div>
   <div class="steps-row">
     <div class="step"><span class="n">1</span><span class="t" data-i18n="s1t">Cargá la sección y los esfuerzos</span><span class="d" data-i18n="s1d">Norma, materiales, b × h y las combinaciones con M, V y N. Arranca con un ejemplo resuelto: cambiás lo tuyo y listo.</span></div>
-    <div class="step"><span class="n">2</span><span class="t" data-i18n="s2t">Elegí: que mento la diseñe, o verificá la tuya</span><span class="d" data-i18n="s2d">mento propone tres armados por grupo (inferior, superior, estribos) con su aprovechamiento. O cargás tus barras y las verificás.</span></div>
+    <div class="step"><span class="n">2</span><span class="t" data-i18n="s2t">Elegí: que mento la diseñe, o verificá la tuya</span><span class="d" data-i18n="s2d">mento propone hasta tres armados por grupo (inferior, superior, estribos) con su aprovechamiento. O cargás tus barras y las verificás.</span></div>
     <div class="step"><span class="n">3</span><span class="t" data-i18n="s3t">Leé la verificación de un vistazo</span><span class="d" data-i18n="s3d">Cumple / no cumple por flexión y corte, con la combinación que gobierna, la tabla completa por combinación y el cálculo detallado.</span></div>
     <div class="step"><span class="n">4</span><span class="t" data-i18n="s4t">Llevátelo</span><span class="d" data-i18n="s4d">Memoria en Word para tu informe y un link que guarda el diseño completo para compartirlo o retomarlo.</span></div>
   </div></section>
@@ -82,7 +81,7 @@
 <section class="calcs" id="calcs">
   <div class="head"><h2 class="t-h2" data-i18n="calc">Calculadoras</h2><span class="sub" data-i18n="calcsub">cada una con las tres normas adentro</span></div>
   <div class="cgrid cgrid--home">
-    <a class="ccard ccard--featured" href="beam/"><div class="body"><div class="name" data-i18n="beam">Viga rectangular</div><div class="desc" data-i18n="c1">Flexión y corte con hasta 10 combinaciones, momento positivo y negativo, axil en corte. Diseño de armadura con tres opciones por grupo, o verificación de la tuya.</div><div class="codes">ACI 318-19 · CIRSOC 201-25 · EN 1992</div><div class="foot"><span class="tag" data-i18n="live">● Disponible</span><span class="go" data-i18n="open">Abrir →</span></div></div><div class="fig"><svg width="214" height="242" viewBox="0 0 310 350" role="img" data-i18n-aria="fig_beam" aria-label="Sección 20 × 60 con su armadura">
+    <a class="ccard ccard--featured" href="beam/"><div class="body"><div class="name" data-i18n="beam">Viga rectangular</div><div class="desc" data-i18n="c1">Flexión y corte con hasta 10 combinaciones, momento positivo y negativo, axil en corte. Diseño de armadura con hasta tres opciones por grupo, o verificación de la tuya.</div><div class="codes">ACI 318-19 · CIRSOC 201-25 · EN 1992</div><div class="foot"><span class="tag" data-i18n="live">● Disponible</span><span class="go" data-i18n="open">Abrir →</span></div></div><div class="fig"><svg width="214" height="242" viewBox="0 0 310 350" role="img" data-i18n-aria="fig_beam" aria-label="Sección 20 × 60 con su armadura">
         <g transform="translate(70,10)"><rect class="dw-concrete" x="0" y="0" width="100" height="300"/>
         <rect class="dw-stirrup" x="12.5" y="12.5" width="75" height="275" rx="5" style="stroke-width:3"/>
         <circle class="dw-bar" cx="19" cy="281" r="4"/><circle class="dw-bar" cx="81" cy="281" r="4"/><circle class="dw-bar" cx="50" cy="282" r="3"/><circle class="dw-bar" cx="18.5" cy="18.5" r="3"/><circle class="dw-bar" cx="81.5" cy="18.5" r="3"/><circle class="dw-bar" cx="50" cy="18" r="2.5"/>
@@ -144,14 +143,12 @@
   <!-- BeamSummary on the example of mento's user guide (four beams, ACI 318-19); py/test_site.py keeps these numbers in step with mento. -->
   <div class="pycode">
     <div class="pycode-hd"><span class="eyebrow" data-i18n="py_nbk">Notebook · vigas del proyecto</span><code>pip install mento</code></div>
-    <pre class="codeblock" translate="no" tabindex="0" role="region" data-i18n-aria="py_code" aria-label="Código de ejemplo con BeamSummary"><span class="kw">import</span> pandas <span class="kw">as</span> pd
-<span class="kw">from</span> mento <span class="kw">import</span> BeamSummary, Concrete_ACI_318_19, SteelBar, MPa
+    <pre class="codeblock" translate="no" tabindex="0" role="region" data-i18n-aria="py_code" aria-label="Código de ejemplo con BeamSummary"><span class="kw">from</span> mento <span class="kw">import</span> BeamSummary, Concrete_ACI_318_19, SteelBar, MPa
 
 conc = Concrete_ACI_318_19(name=<span class="str">"H-25"</span>, f_c=25 * MPa)
 steel = SteelBar(name=<span class="str">"ADN 420"</span>, f_y=420 * MPa)
-beams = pd.read_excel(<span class="str">"project.xlsx"</span>, sheet_name=<span class="str">"Beams"</span>)
 
-summary = BeamSummary(conc, steel, beams)
+summary = BeamSummary.from_excel(conc, steel, <span class="str">"project.xlsx"</span>)
 summary.check()                       <span class="cm" data-i18n="py_c1"># tu armado, viga por viga</span>
 summary.design()                      <span class="cm" data-i18n="py_c2"># el armado de todas</span>
 summary.export_design(<span class="str">"design.xlsx"</span>)  <span class="cm" data-i18n="py_c3"># de vuelta a Excel</span>
@@ -211,7 +208,7 @@ summary.results_detailed_doc()        <span class="cm" data-i18n="py_c4"># la me
     <div class="about"><span data-i18n="about">mento nació de las planillas y scripts que usamos todos los días en la oficina para calcular hormigón. Los pasamos a un paquete de Python para poder testearlos, y a esta web para diseñar rápido sin instalar nada.</span></div>
   </div></section>
 
-<footer class="foot"><span data-i18n="footer">Herramienta de apoyo. La verificación final es responsabilidad del profesional.</span><span class="spacer"></span><span>mento <span id="version">1.3.0</span> · <span data-i18n="oss">Código abierto</span> · <a href="#support" data-i18n="support">Apoyá el proyecto</a> · <a href="https://github.com/mihdicaballero/mento">GitHub</a> · <a href="https://mento-docs.readthedocs.io/en/latest/" data-i18n="docs">Docs</a> · <a href="https://github.com/mihdicaballero/mento/discussions" data-i18n="feedback">Contanos qué te pareció</a></span></footer>
+<footer class="foot"><span data-i18n="footer">Herramienta de apoyo. La verificación final es responsabilidad del profesional.</span><span class="spacer"></span><span>mento <span id="version">1.6.3</span> · <span data-i18n="oss">Código abierto</span> · <a href="#support" data-i18n="support">Apoyá el proyecto</a> · <a href="https://github.com/mihdicaballero/mento">GitHub</a> · <a href="https://mento-docs.readthedocs.io/en/latest/" data-i18n="docs">Docs</a> · <a href="https://github.com/mihdicaballero/mento/discussions" data-i18n="feedback">Contanos qué te pareció</a></span></footer>
 </main>
 </div>
 <script type="module" src="home.js"></script>

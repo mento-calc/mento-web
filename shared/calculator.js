@@ -415,10 +415,11 @@ export async function start(spec) {
     $("verdict").hidden = false;
 
     const governing = Math.max(...result.ledger.map((row) => row.dcr ?? 0));
-    // The DCR alone does not decide. A limit of the code the section misses (mento's warnings: the
-    // minimum steel, bars that do not fit) fails it as a DCR above one would, and so does a section
-    // mento says does not comply (ACI/CIRSOC: not tension-controlled, whatever its DCR). The number
-    // stays; the word and the notices say why not.
+    // The DCR alone does not decide. A limit of the code the section misses (mento's warnings that
+    // py/common.py marks "bad": the minimum steel, bars that do not fit) fails it as a DCR above one
+    // would, and so does a section mento says does not comply (ACI/CIRSOC: not tension-controlled,
+    // whatever its DCR). Its notes and pending checks are listed and do not. The number stays; the
+    // word and the notices say why not.
     const failed = result.complies === false || result.notices.some((item) => item.severity === "bad");
     const status = failed ? "bad" : dcrState(governing);
     const word = status === "bad" ? t.fails : status === "warn" ? t.passes_limit : t.passes;
@@ -541,6 +542,12 @@ export async function start(spec) {
     };
     const cellHtml = (value) => mark(value) ?? escapeHtml(value);
     const card = (table) => {
+      // mento's own status of the report, strength and detailing: a sentence per row, its note under it.
+      if (table.columns.length === 2) {
+        const rows = table.rows.map(([name, status, note]) => `<tr><th scope="row">${escapeHtml(name)}</th><td class="status">${escapeHtml(status)}`
+          + `${note ? `<br><span class="unit">${escapeHtml(note)}</span>` : ""}</td></tr>`).join("");
+        return `<div class="dtl-card"><div class="dtl-t">${escapeHtml(table.title)}</div><table class="dtl-tb"><tbody>${rows}</tbody></table></div>`;
+      }
       if (table.columns.length <= 3) {
         const rows = table.rows.map(([name, symbol, value, unit]) => {
           const state = symbol === "DCR" ? dcrState(Number(value)) : "";

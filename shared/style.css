@@ -765,6 +765,8 @@ a.btn--sec:hover,a.btn--sec:active{color:var(--ink)}
 .dtl-tb .unit{color:var(--ink-2);font-size:var(--fs-12);white-space:nowrap;font-family:var(--font-sans)}
 .dtl-tb td.unit{padding-left:4px}
 .dtl-tb .ok{text-align:right;white-space:nowrap}
+.dtl-tb .status{text-align:right}
+.dtl-tb .status .unit{white-space:normal}
 .dtl-tb tr.is-dcr > *{background:var(--surface-2);font-weight:600}
 .dtl-tb td.dcr.ok{color:var(--ok)} .dtl-tb td.dcr.warn{color:var(--warn)} .dtl-tb td.dcr.bad{color:var(--bad)}
 .dtl-mark{display:inline-flex;align-items:center;gap:4px;font-family:var(--font-mono);font-size:var(--fs-11);font-weight:500;line-height:1;border-radius:999px;padding:3px 7px;vertical-align:middle}

@@ -29,6 +29,7 @@ from mento import (
     kNm,
     mm,
 )
+from mento.design_results import transverse_notation
 
 CONCRETES = {
     "ACI 318-19": Concrete_ACI_318_19,
@@ -252,7 +253,8 @@ def _face(face: Any) -> dict[str, Any]:
 # for a face and {"n": 1, "d": 6, "s": 13} for the stirrups. Diameters in mm, spacing in cm.
 
 
-_FIT_CODES = ("clear_spacing_below_min", "bars_do_not_fit")
+# The vibrator's room between the top bars is one more thing a design never gives up.
+_FIT_CODES = ("clear_spacing_below_min", "clear_spacing_below_vibrator", "bars_do_not_fit")
 
 
 def _fits_one_row(data: dict[str, Any], stirrups: dict[str, Any], face: str, layers: Any) -> bool:
@@ -335,7 +337,10 @@ def _layout_bars(layout: dict[str, Any]) -> str:
     if not layout:
         return ""
     if "n" in layout:
-        return f"{layout['n']:g}eØ{layout['d']:g}/{layout['s']:g} cm"
+        # As mento writes it, in the language set: one closed stirrup and the legs beyond it (1e+2rØ10/15)
+        return (
+            f"{transverse_notation('beam', layout['n'], layout['d'] * mm, layout['s'] * cm, 0 * cm, compact=True)} cm"
+        )
     counts: dict[float, int] = {}
     for index in range(1, 5):
         n = int(layout.get(f"n{index}") or 0)

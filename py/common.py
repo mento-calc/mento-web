@@ -30,6 +30,7 @@ from mento import (
     kN,
     kNm,
 )
+from mento.verification import warning_category
 
 CONCRETES = {
     "ACI 318-19": Concrete_ACI_318_19,
@@ -283,16 +284,18 @@ def captured_notices(captured: list[Any]) -> list[dict[str, Any]]:
 def warning_notices(element: Any, captured: list[Any]) -> list[dict[str, Any]]:
     """What the page flags, as mento judges it: its Python warnings, then its ``DesignWarning``s.
 
-    Every ``DesignWarning`` is a limit of the code the section misses (minimum or maximum steel,
-    spacing, bars that do not fit, a section that is not tension-controlled), so each one fails the
-    element, whatever its DCR. ``code`` is mento's stable one; the page shows ``message``, which
-    mento writes in the language set with ``mento.set_language``."""
+    mento sorts them with ``warning_category``. A limit of the strength or of the detailing the
+    section misses (minimum or maximum steel, spacing, bars that do not fit, a cage that cannot be
+    built) fails the element, whatever its DCR. A note (skin steel to place) or a check left pending
+    (the bracing of compression bars under EN) is listed and does not fail it, as in mento's
+    summaries. ``code`` is mento's stable one; the page shows ``message``, which mento writes in the
+    language set with ``mento.set_language``."""
     notices = captured_notices(captured)
     for warning in element.warnings:
         notices.append(
             {
                 "code": warning.code,
-                "severity": "bad",
+                "severity": "bad" if warning_category(warning.code) in ("resistance", "failed") else "warn",
                 "message": warning.message,
                 "values": {
                     "face": warning.face,

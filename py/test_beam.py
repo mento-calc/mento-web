@@ -3,15 +3,19 @@
 import base64
 import io
 import json
+from types import SimpleNamespace
 
 import common
 import docx
 import pytest
+from mento import mm
 
 import beam
+import slab
+import wall
 
 CODES = ["ACI 318-19", "CIRSOC 201-25", "EN 1992-2004"]
-FIT = ("clear_spacing_below_min", "bars_do_not_fit")
+FIT = beam._FIT_CODES
 
 
 def solve(**changes):
@@ -53,13 +57,24 @@ def test_section_moves_bars_that_do_not_fit_to_a_second_row():
 
 
 def test_a_designed_second_row_stays_in_the_second_row():
-    # mento puts 2Ø16 and 2Ø12 in two rows here (n_1 and n_3); its options list only the groups
+    # mento puts 2Ø12 and 2Ø10 in two rows here (n_1 and n_3); its options list only the groups
     # that carry bars, and read as n_1 + n_2 they would be four bars in one row of a 12 cm web
-    result = solve(width=12, height=30, forces=[{"label": "U", "M_y": 40, "V_z": 50}])
-    assert result["layouts"]["bot"] == {"n1": 2, "d1": 16.0, "n3": 2, "d3": 12.0}
-    assert result["rows"]["bot"] == ["2Ø16", "2Ø12"]
-    assert [label["bars"] for label in result["section"]["labels"]["bot"]] == ["2Ø16", "2Ø12"]
+    result = solve(width=12, height=30, forces=[{"label": "U", "M_y": 30, "V_z": 50}])
+    assert result["complies"]
+    assert result["layouts"]["bot"] == {"n1": 2, "d1": 12.0, "n3": 2, "d3": 10.0}
+    assert result["rows"]["bot"] == ["2Ø12", "2Ø10"]
+    assert [label["bars"] for label in result["section"]["labels"]["bot"]] == ["2Ø12", "2Ø10"]
     assert not any(notice["code"] in FIT for notice in result["notices"])
+
+
+def test_top_bars_without_room_for_the_vibrator_do_not_fit_one_row():
+    # five Ø16 in a 25 cm web meet the clear spacing of §25.2.1 and leave no 30 mm for the vibrator
+    layers = [SimpleNamespace(n=2, d_b=16 * mm), SimpleNamespace(n=3, d_b=16 * mm)]
+    data = {**beam.EXAMPLE, "width": 25}
+    stirrups = {"n": 1, "d": 6, "s": 13}
+    assert not beam._fits_one_row(data, stirrups, "top", layers)
+    assert beam._fits_one_row(data, stirrups, "bot", layers)  # the bottom has no vibrator to let through
+    assert beam._layers_layout(data, stirrups, "top", layers) == {"n1": 2, "d1": 16.0, "n3": 3, "d3": 16.0}
 
 
 def test_groups_that_fit_one_row_stay_in_it():
@@ -146,6 +161,58 @@ def test_a_section_that_is_not_tension_controlled_fails_with_a_dcr_below_one():
 
 def test_the_worked_example_has_no_errors():
     assert not [notice for notice in solve()["notices"] if notice["severity"] == "bad"]
+
+
+TALL = {"width": 30, "height": 120, "forces": [{"label": "U", "M_y": 700, "V_z": 400, "N_x": 0}]}
+
+
+@pytest.mark.parametrize(
+    ("code", "fy", "changes", "expected"),
+    [
+        ("CIRSOC 201-25", 420, TALL, "skin_reinforcement_required"),
+        ("EN 1992-2004", 500, TALL, "skin_en_required"),
+        ("EN 1992-2004", 500, DOUBLY, "compression_detailing_en_pending"),
+    ],
+)
+def test_a_note_or_a_pending_check_is_listed_and_does_not_fail_the_section(code, fy, changes, expected):
+    """A beam that needs skin steel, or whose compression bars EN leaves to check, still complies."""
+    result = solve(code=code, fy=fy, **changes)
+    assert result["complies"], result["ledger"]
+    assert [(notice["code"], notice["severity"]) for notice in result["notices"]] == [(expected, "warn")]
+    assert result["notices"][0]["message"]
+
+
+def test_a_cage_mento_cannot_build_fails_the_section_whatever_its_dcr():
+    """The strength holds, but no stirrup cage holds these bars: mento's detailing status is failed."""
+    forces = [{"label": "U1", "M_y": 91, "V_z": 80}, {"label": "U2", "M_y": -45.5, "V_z": 40}]
+    result = solve(code="ACI 318-19", width=40, height=25, forces=forces)
+    assert max(row["dcr"] for row in result["ledger"]) <= 1
+    severities = {notice["code"]: notice["severity"] for notice in result["notices"]}
+    assert severities["cage_detailing_infeasible"] == "bad"
+
+
+def test_stirrups_are_written_as_mento_writes_them():
+    """One closed stirrup and the legs beyond it, in the page's language; ``n`` stays the two-leg count."""
+    rebar = {"bot": {"n1": 5, "d1": 16}, "top": {"n1": 4, "d1": 12}, "stirrups": {"n": 2, "d": 8, "s": 10}}
+    wide = {"mode": "check", "rebar": rebar, "width": 60, "height": 50}
+    assert solve(**wide)["rebar"]["st"] == "1e+2rØ8/10 cm"
+    assert solve(lang="en", **wide)["rebar"]["st"] == "1s+2lØ8/10 cm"
+    assert solve(**wide)["layouts"]["st"]["n"] == 2
+    assert solve(**wide)["section"]["stirrups"]["n"] == 2
+
+
+@pytest.mark.parametrize("module", [beam, slab, wall])
+@pytest.mark.parametrize("code", CODES)
+def test_every_printed_table_has_a_shape_the_page_lays_out(module, code):
+    """shared/calculator.js lays out three: a status (2 columns), a list (3) and a table of checks (5)."""
+    result = json.loads(
+        module.run(json.dumps({**module.EXAMPLE, "code": code, "fy": 500 if code[:2] == "EN" else 420}))
+    )
+    tables = [table for report in result["reports"] for table in report["tables"]]
+    assert tables
+    for table in tables:
+        assert len(table["columns"]) in (2, 3, 5), table
+        assert {len(row) for row in table["rows"]} == {len(table["columns"]) + 1}, table
 
 
 def test_check_mode_reports_insufficient_rebar():
@@ -271,7 +338,10 @@ def test_detailed_results_come_as_tables_too():
     check = flexure["tables"][3]
     assert check["columns"] == ["Unit", "Value", "Min.", "Max.", "Ok?"]
     assert all(len(row) == 6 for row in check["rows"])
-    assert shear["tables"][-1]["rows"][-1][1:3] == ["DCR", "0.65"]
+    assert shear["tables"][-2]["rows"][-1][1:3] == ["DCR", "0.65"]
+    # the report closes on mento's status: strength and detailing, each with its sentence and its note
+    status = shear["tables"][-1]
+    assert len(status["columns"]) == 2 and [len(row) for row in status["rows"]] == [3, 3]
     assert "BEAM FLEXURE DETAILED RESULTS" in result["detailed"]  # the text stays, for Copiá
 
 

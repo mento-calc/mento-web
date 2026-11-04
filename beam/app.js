@@ -100,7 +100,7 @@ function python(state, result) {
     if (layouts.bot) lines.push(`beam.set_longitudinal_rebar_bot(${face(layouts.bot)})`);
     if (layouts.top && Object.keys(layouts.top).length) lines.push(`beam.set_longitudinal_rebar_top(${face(layouts.top)})`);
     if (layouts.st?.n) {
-      lines.push(`beam.set_transverse_rebar(n_stirrups=${layouts.st.n}, d_b=${layouts.st.d} * mm, s_l=${layouts.st.s} * cm)`);
+      lines.push(`beam.set_transverse_rebar(legs=${2 * layouts.st.n}, d_b=${layouts.st.d} * mm, s_l=${layouts.st.s} * cm)`);
     }
   }
   return lines.concat([
