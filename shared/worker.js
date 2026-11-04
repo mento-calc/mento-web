@@ -6,7 +6,7 @@
 // plus unsolicited {type: "progress", step} and {type: "ready", version} on startup.
 
 const PYODIDE_VERSION = "0.29.5";
-const MENTO_VERSION = "1.6.1";
+const MENTO_VERSION = "1.6.3";
 const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 const PYODIDE_PACKAGES = ["numpy", "pandas", "jinja2", "lxml"];
 // mento's own dependencies that Pyodide does not ship (it is installed with deps=False).
@@ -20,9 +20,9 @@ importScripts(`${PYODIDE_URL}pyodide.js`);
 
 const progress = (step) => self.postMessage({ type: "progress", step });
 
-// mento imports IPython, matplotlib and seaborn at the top of its modules, but only uses them to
+// mento imports IPython and matplotlib at the top of some of its modules, but only uses them to
 // render Markdown in notebooks and to plot. The page draws the section itself, so stubs stand in
-// for all three: ~25 MB less to download and ~3 s less of Python imports on every visit.
+// for both: ~25 MB less to download and ~3 s less of Python imports on every visit.
 const STUBS = `
 import importlib.abc, importlib.machinery, sys, types
 
@@ -33,7 +33,7 @@ class _AnythingMeta(type):
         return cls
 
 class _Anything(metaclass=_AnythingMeta):
-    """Accepts any call or attribute: sns.set_theme(...), plt.rcParams.update(...), class Foo(Figure)."""
+    """Accepts any call or attribute: plt.rcParams.update(...), class Foo(Figure)."""
     def __init__(self, *args, **kwargs): pass
     def __call__(self, *args, **kwargs): return self
     def __getattr__(self, name):
@@ -49,7 +49,7 @@ class _StubModule(types.ModuleType):
 
 class _StubFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
     def find_spec(self, name, path=None, target=None):
-        if name.split(".")[0] in ("matplotlib", "seaborn"):
+        if name.split(".")[0] == "matplotlib":
             return importlib.machinery.ModuleSpec(name, self, is_package=True)
     def create_module(self, spec): return _StubModule(spec.name)
     def exec_module(self, module): module.__version__ = "99"  # pandas checks it when it probes for matplotlib
