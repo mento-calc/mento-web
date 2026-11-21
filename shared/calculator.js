@@ -8,6 +8,11 @@ export const $ = (id) => document.getElementById(id);
 export const num = (value) => Number(String(value ?? "").replace(",", ".").replace("−", "-"));
 export const dcrState = (dcr) => (dcr === null || dcr === undefined ? "none" : dcr <= 0.95 ? "ok" : dcr <= 1 ? "warn" : "bad");
 export const two = (dcr) => (dcr === null || dcr === undefined ? "—" : dcr.toFixed(2));
+// What visitors do, for the site's analytics (the Google tag in each page's head): the action and
+// the calculator's settings travel, never the numbers typed. With the tag blocked it does nothing.
+function track(event, params) {
+  try { window.gtag?.("event", event, params); } catch { /* analytics never breaks the page */ }
+}
 // Dimension lines, as a drawing shows them: extension lines off the section's edges, the line
 // between them with oblique ticks, the value beside it. `edge` is the section's edge they leave from.
 const tick = (x, y) => `<path class="dw-dl" d="M${x - 3} ${y + 3}L${x + 3} ${y - 3}"/>`;
@@ -298,6 +303,8 @@ export async function start(spec) {
     if (data.type === "progress") return showStep(data.step);
     if (data.type === "ready") {
       ready = true;
+      // how long visitors really wait for Python, from the page's first byte
+      track("mento_ready", { calculator: spec.module, load_seconds: Math.round(performance.now() / 100) / 10 });
       $("version").textContent = data.version;
       $("step-mento").textContent = `mento ${data.version}`;
       return calculate();
@@ -350,6 +357,13 @@ export async function start(spec) {
   // of queueing in the worker a run per pause whose results would be thrown away.
   let running = false;
   let queued = false;
+  // The page calculates its example (or a shared link) by itself and again on every keystroke, so
+  // "calculate" is sent once a visit, on the first answer to inputs the visitor changed. The name
+  // is not one of them: saving to the list moves it on to the next one by itself.
+  const inputsOf = (sent) => JSON.stringify({ ...sent, lang: null, label: null });
+  let openingInputs = null;
+  let calculated = false;
+  const context = () => ({ calculator: spec.module, mode: state.mode, code: state.code, units: state.units });
 
   async function calculate() {
     if (running) { queued = true; return; }
@@ -380,6 +394,10 @@ export async function start(spec) {
     applied = mine;
     render(result);
     if (result.ok) saveResult(sent, result);
+    if (result.ok && !calculated && openingInputs !== null && inputsOf(sent) !== openingInputs) {
+      calculated = true;
+      track("calculate", { ...context(), verdict: lastResult?.status });  // ok, warn or bad, as render() judged it
+    }
   }
 
   // ------------------------------------------------------------ saved result
@@ -969,6 +987,7 @@ export async function start(spec) {
     // the next beam starts on the next name, so editing it does not overwrite this one
     const next = nextLabel(label);
     toast((updated ? t.list_updated : t.list_saved).replace("{label}", label).replace("{next}", next));
+    track("list_save", { ...context(), items: list.length });
     state.label = next;
     $("label").value = next;
     schedule();
@@ -1010,6 +1029,7 @@ export async function start(spec) {
       saveFile(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
         `mento-${t.file_name_list}-${new Date().toISOString().slice(0, 10)}.xlsx`);
       toast(t.list_dl_done);
+      track("download_list", { ...context(), items: list.length });
     } catch (error) {
       $("notices").innerHTML = notice("bad", `<b>${t.list_cannot}</b> ${escapeHtml(error.message)}`) + $("notices").innerHTML;
       $("notices").scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "center" });
@@ -1076,6 +1096,7 @@ export async function start(spec) {
           `mento-${t.file_name}-${state.label}-${new Date().toISOString().slice(0, 10)}.docx`);
       }
       toast(t.report_done);
+      track("download_report", context());
     } catch (error) {
       $("notices").innerHTML = notice("bad", `<b>${t.cannot}</b> <span class="mono">${error.message}</span>`) + $("notices").innerHTML;
     } finally {
@@ -1140,10 +1161,14 @@ export async function start(spec) {
     schedule({ now: true });
   });
 
-  $("share").addEventListener("click", () => { writeHash(); copy(location.href, t.link_copied); });
+  $("share").addEventListener("click", () => {
+    writeHash(); copy(location.href, t.link_copied);
+    track("share_link", context());
+  });
   $("copy-python").addEventListener("click", (event) => {
     event.preventDefault(); event.stopPropagation();
     copy($("python").textContent, t.code_copied);
+    track("copy_python", context());
   });
   // The link in its first cell is the page's: it holds the last inputs that were valid, as Compartí does.
   $("notebook-python").addEventListener("click", (event) => {
@@ -1152,10 +1177,12 @@ export async function start(spec) {
     const json = notebook(spec.python(state, lastResult, t), intro, $("version").textContent);
     saveFile(new Blob([json], { type: "application/x-ipynb+json" }), `mento-${t.file_name}-${state.label}.ipynb`);
     toast(t.notebook_done);
+    track("download_notebook", context());
   });
   $("copy-detailed").addEventListener("click", (event) => {
     event.preventDefault(); event.stopPropagation();
     copy(lastResult?.detailed ?? "", t.text_copied);
+    track("copy_detailed", context());
   });
   $("report").addEventListener("click", downloadReport);
   if (spec.collection) {
@@ -1195,6 +1222,7 @@ export async function start(spec) {
       saveFile(await png, `mento-${t.file_name}-${state.label}-${t.image_file}.png`);
       toast(t.image_saved);
     }
+    track("copy_drawing", context());
   });
 
   // Which disclosures are open is this visitor's habit, not part of the design (5.8).
@@ -1210,6 +1238,7 @@ export async function start(spec) {
   }
 
   validate();
+  openingInputs = inputsOf(payload());
   renderPython();
   showStep("python");
   renderPlaceholders();
