@@ -43,6 +43,9 @@ def _model(beam: Beam, loads: list) -> object:
             support_RY=True,
             support_RZ=kind == "fixed",
         )
+        spring = beam.springs[index] if beam.springs else 0.0
+        if spring > 0 and kind != "fixed":
+            model.def_support_spring(f"n{index}", "RZ", spring)
     for load in loads:
         name = f"e{load.element}"
         if isinstance(load, Uniform):
@@ -78,6 +81,9 @@ def signs() -> tuple[float, float]:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_the_same_beam_in_pynite(seed: int, signs: tuple[float, float]) -> None:
     beam, loads = _random_case(seed)
+    # PyNite's members bend end to end: the rigid stretches are checked against stiff elements
+    # in test_analysis.TestRigidJoints instead
+    beam = Beam(beam.lengths, beam.EI, beam.supports, springs=beam.springs)
     model = _model(beam, loads)
     result = solve(beam, {"all": loads})["all"]
     moment_sign, shear_sign = signs

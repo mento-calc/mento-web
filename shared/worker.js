@@ -2,17 +2,19 @@
 // Each calculator starts it as `worker.js?module=<name>`, which loads `py/<name>.py`.
 // A glue module exposes run(json) -> json, report(json) -> json and an EXAMPLE dict.
 // With `&prefetch=1` (the home page) it builds the saved environment (below) if there is none, and quits.
-// Protocol: {id, type: "run" | "report" | "summary", payload} -> {id, ok, result | error}
+// Protocol: {id, type: "run" | "analyse" | "report" | "summary", payload} -> {id, ok, result | error}
 // plus unsolicited {type: "progress", step} and {type: "ready", version} on startup.
 
 const PYODIDE_VERSION = "0.29.5";
-const MENTO_VERSION = "1.6.3";
+const MENTO_VERSION = "1.7.0";
 const PYODIDE_URL = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
 const PYODIDE_PACKAGES = ["numpy", "pandas", "jinja2", "lxml"];
 // mento's own dependencies that Pyodide does not ship (it is installed with deps=False).
 const PYPI_PACKAGES = ["pint", "tabulate", "python-docx"];
 
 const MODULE = new URL(self.location.href).searchParams.get("module");
+// What a glue module imports from py/ besides common: fetched before it, in this order.
+const MODULES_OF = { continuous: ["analysis", "beam"] };
 if (!/^[a-z_]+$/.test(MODULE || "")) throw new Error(`Unknown calculator module: ${MODULE}`);
 const PREFETCH = new URL(self.location.href).searchParams.has("prefetch");
 
@@ -191,8 +193,9 @@ async function boot(saved, dev) {
   progress("warmup");
   pyodide.runPython(STUBS);
   pyodide.globals.get("env_pint_cache")();
-  // py/common.py holds what the calculators share, so it travels with every one of them.
-  for (const name of ["common", MODULE]) {
+  // py/common.py holds what the calculators share, so it travels with every one of them; a glue
+  // module that builds on others (the continuous beam on the solver and on the beam's) brings them.
+  for (const name of ["common", ...(MODULES_OF[MODULE] ?? []), MODULE]) {
     // Revalidated every time: a glue module a release older than the page breaks the import.
     const response = await fetch(new URL(`../py/${name}.py`, self.location.href), { cache: "no-cache" });
     if (!response.ok) throw new Error(`py/${name}.py: HTTP ${response.status}`);
@@ -258,7 +261,8 @@ self.onmessage = async ({ data }) => {
   try {
     const { api, pyodide } = await apiPromise;
     if (type === "summary") await loadExcelWriter(pyodide);
-    const fn = { report: api.report, summary: api.summary }[type] ?? api.run;
+    // "analyse" is the continuous beam's quick answer: the diagrams before the design
+    const fn = { report: api.report, summary: api.summary, analyse: api.analyse }[type] ?? api.run;
     self.postMessage({ id, ok: true, result: JSON.parse(fn(JSON.stringify(payload))) });
   } catch (error) {
     self.postMessage({ id, ok: false, error: String(error) });

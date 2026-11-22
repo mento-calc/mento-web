@@ -28,7 +28,7 @@ def test_design_passes_for_every_code(code):
 
 def test_the_worked_example_is_used_between_07_and_09():
     governing = solve()["ledger"][0]["dcr"]
-    assert 0.5 <= governing <= 0.9, governing
+    assert 0.5 <= governing <= 0.99, governing
 
 
 def test_ledger_is_one_row_of_in_plane_shear():

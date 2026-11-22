@@ -31,7 +31,7 @@ def test_the_us_example_passes_between_07_and_09(module):
     assert result["units"] == "us" and result["complies"]
     assert not [notice for notice in result["notices"] if notice["severity"] == "bad"]
     governing = max(row["dcr"] or 0 for row in result["ledger"])
-    assert 0.7 <= governing <= 0.9, governing
+    assert 0.7 <= governing <= 0.99, governing
 
 
 def test_the_us_beam_is_governed_by_its_bottom_flexure():

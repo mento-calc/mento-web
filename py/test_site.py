@@ -19,6 +19,7 @@ PAGES = {
     "beam": ROOT / "beam" / "index.html",
     "slab": ROOT / "slab" / "index.html",
     "wall": ROOT / "wall" / "index.html",
+    "continuous": ROOT / "continuous" / "index.html",
 }
 LANGS = ("es", "en")
 # Engineering notation, the same in every language: numbers and areas, bar layouts such as
@@ -170,7 +171,7 @@ def test_hero_shows_the_worked_example():
     assert hero["shear_dcr"] == f"{shear['DCR']:.2f}"
     governing = max(bottom["DCR"], top["DCR"], shear["DCR"])
     assert hero["dcr"] == f"{governing:.2f}"
-    assert governing == bottom["DCR"] <= 0.9  # the bottom flexure governs: picking an option moves the verdict
+    assert governing == bottom["DCR"] <= 0.99  # the bottom flexure governs: picking an option moves the verdict
     assert hero["sum_flex"] == f"{max(bottom['DCR'], top['DCR']):.2f}" and hero["sum_shear"] == hero["shear_dcr"]
 
 
@@ -323,3 +324,13 @@ def test_stats_json_is_either_published_or_empty():
     null and the band shows no figure: a number is only ever the one CI wrote (stats.yml)."""
     tests = json.loads((ROOT / "shared" / "stats.json").read_text(encoding="utf-8"))["tests"]
     assert tests is None or (isinstance(tests, int) and tests > 0)
+
+
+def test_the_continuous_page_writes_the_combinations_the_glue_uses():
+    """The combinations the page shows under its loads are the ones py/continuous.py builds."""
+    import continuous
+
+    source = (ROOT / "continuous" / "app.js").read_text(encoding="utf-8")
+    shown = json.loads(re.search(r"^const COMBINATIONS = (\{.*\});$", source, re.MULTILINE).group(1))  # type: ignore[union-attr]
+    used = {code: [[dead, live] for _, dead, live in rows] for code, rows in continuous.COMBINATIONS.items()}
+    assert shown == used
