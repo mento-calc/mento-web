@@ -1,19 +1,24 @@
-MIT License
+Copyright (c) 2026 Mehdí Caballero. All rights reserved.
 
-Copyright (c) 2026 Mehdí Caballero
+This repository holds the source of the mento-web site. It is published so that its
+calculations can be read and checked, not so that it can be reused.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this
-software and associated documentation files (the "Software"), to deal in the Software
-without restriction, including without limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
-to whom the Software is furnished to do so, subject to the following conditions:
+You may read this source, and use the site as it is published at its official address.
 
-The above copyright notice and this permission notice shall be included in all copies or
-substantial portions of the Software.
+No other right is granted. Without the prior written permission of the copyright holder you
+may not copy, modify, distribute, sublicense, host, sell or otherwise make available this
+software, in whole or in part, nor build a product or service derived from it.
+
+Copies obtained under the MIT License this repository carried before this notice keep that
+license; this notice applies from the commit that introduced it on.
+
+Third-party software keeps its own license and is not covered by this notice: among others,
+the mento package (MIT License, https://github.com/mento-calc/mento) and Pyodide (Mozilla
+Public License 2.0).
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
 INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
 PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
-FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR ITS USE. Its results are a support tool; the final check of any design is the
+responsibility of the engineer who signs it.
