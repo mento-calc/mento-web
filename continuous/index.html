@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es">
+<head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-SD4WL05WSL"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-SD4WL05WSL');
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-i18n="page_title">mento · Viga continua de hormigón armado</title>
+<meta name="description" data-i18n-content="page_desc" content="Viga continua de hormigón armado sobre pilares: cargás vanos, pilares y cargas, mento calcula solicitaciones, redistribuye momentos y diseña la armadura de cada vano según ACI 318-19, CIRSOC 201-25 y EN 1992.">
+<meta name="theme-color" content="#4890d2">
+<link rel="icon" href="../shared/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../shared/style.css">
+<script>
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<script>
+  window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/speed-insights/script.js"></script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-logo" viewBox="0 0 22 22"><rect width="22" height="22" rx="5" fill="#4890d2"/><rect x="11.6" y="4.2" width="6.2" height="6.2" rx="1.4" fill="#fff"/><rect x="4.2" y="11.6" width="6.2" height="6.2" rx="1.4" fill="#fff"/><rect x="11.6" y="11.6" width="6.2" height="6.2" rx="1.4" fill="#fff"/></symbol>
+    <symbol id="i-check" viewBox="0 0 18 18"><path d="M3 9.5l4 4 8-8" fill="none" stroke="currentColor" stroke-width="2.6"/></symbol>
+    <symbol id="i-cross" viewBox="0 0 18 18"><path d="M4 4l10 10M14 4L4 14" fill="none" stroke="currentColor" stroke-width="2.6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 18 18"><path d="M9 2v9M5 8l4 4 4-4M3 15h12" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+    <symbol id="i-link" viewBox="0 0 18 18"><path d="M7 11a3 3 0 0 0 4 0l3-3a3 3 0 0 0-4-4l-1 1M11 7a3 3 0 0 0-4 0l-3 3a3 3 0 0 0 4 4l1-1" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 1.5 15 14H1z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 6v4M8 11.5v1" stroke="currentColor" stroke-width="1.6"/></symbol>
+    <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7.2v4.2M8 4.4v1.2" stroke="currentColor" stroke-width="1.6"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5" y="5" width="9" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5" fill="none" stroke="currentColor" stroke-width="1.4"/></symbol>
+  </defs>
+</svg>
+
+<div class="page">
+<header class="top">
+  <a class="brand" href="../"><svg aria-hidden="true"><use href="#i-logo"/></svg>mento</a>
+  <span class="crumb" aria-hidden="true">/</span><span class="title" data-i18n="cbeam">Viga continua</span><span class="sub" data-i18n="cbeamsub">análisis + diseño</span>
+  <span class="spacer"></span>
+  <nav><a href="../" data-i18n="calc">Calculadoras</a><a href="https://mento-docs.readthedocs.io/en/latest/" data-i18n="docs">Docs</a>
+    <div class="seg seg--small" role="radiogroup" data-i18n-aria="lang_label" aria-label="Idioma"><button type="button" role="radio" aria-checked="true" data-lang="es">ES</button><button type="button" role="radio" aria-checked="false" data-lang="en">EN</button></div></nav>
+</header>
+<div class="verdict-strip" id="strip" data-state="loading" aria-live="polite"><span class="spin"></span><span style="font-size:14px" data-i18n="warm">Preparando el motor</span></div>
+<main class="calc">
+<h1 class="vh" data-i18n="cbeam">Viga continua</h1>
+<div class="stations stations--cb">
+  <section class="station station-1"><div class="st"><b>1</b><span data-i18n="s1">Datos</span></div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:8px">
+      <div class="field"><span class="lbl" data-i18n="units">Unidades</span><div class="seg" id="units" role="radiogroup" data-i18n-aria="aria_units" aria-label="Sistema de unidades"><button type="button" role="radio" aria-checked="true" data-units="si">SI</button><button type="button" role="radio" aria-checked="false" data-units="us">US</button></div></div>
+      <label class="field"><span class="lbl" data-i18n="code">Norma</span><span class="in sel"><select id="code"></select></span></label>
+    </div>
+    <p class="hint" id="units-note" data-i18n="units_note" hidden>Unidades US: solo ACI 318-19.</p>
+    <label class="field"><span class="lbl" data-i18n="conc">Hormigón</span><span class="in sel"><select id="fc"></select></span></label>
+    <label class="field"><span class="lbl" data-i18n="steel">Acero</span><span class="in sel"><select id="fy"></select></span></label>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:4px">
+      <label class="field" id="field-cover"><span class="lbl"><i class="sym" style="text-transform:none;font-size:13px;letter-spacing:0">c</i><sub style="text-transform:none;letter-spacing:0">c</sub></span><span class="in"><input id="cover" type="number" inputmode="decimal" min="0" step="any" data-i18n-aria="aria_cover" aria-label="Recubrimiento cc (mm)" aria-describedby="err-cover"><span class="unit" data-unit="cov">mm</span></span><span class="err" id="err-cover" hidden></span></label>
+      <label class="field" id="field-redis"><span class="lbl" data-i18n="redis">Redistribución</span><span class="in"><input id="redis" type="number" inputmode="decimal" min="0" max="30" step="any" data-i18n-aria="aria_redis" aria-label="Redistribución de momentos negativos (%)" aria-describedby="err-redis"><span class="unit" data-i18n="pct">%</span></span><span class="err" id="err-redis" hidden></span></label>
+      <label class="field" id="field-defl"><span class="lbl" data-i18n="defl">Mayorador de flecha</span><span class="in"><input id="defl" type="number" inputmode="decimal" min="1" step="any" data-i18n-aria="aria_defl" aria-label="Mayorador de la flecha instantánea"><span class="unit">×</span></span><span class="err" id="err-defl" hidden></span></label>
+      <label class="field" id="field-head"><span class="lbl" data-i18n="head">Empotr. en cabeza</span><span class="in"><input id="head" type="number" inputmode="decimal" min="0" max="1" step="any" data-i18n-aria="aria_head" aria-label="Coeficiente de empotramiento en cabeza del pilar bajo azotea"></span><span class="err" id="err-head" hidden></span></label>
+    </div>
+    <label class="cb-check"><input type="checkbox" id="pattern"><span data-i18n="pattern">Alternar la sobrecarga</span></label>
+    <p class="hint" data-i18n="hint_data">La redistribución baja el momento negativo; la norma fija el máximo según la ductilidad. ACI 318 pide alternar la sobrecarga. El mayorador lleva la flecha instantánea a la total (fisuración y fluencia).</p>
+    <label class="field"><span class="lbl" data-i18n="label">Nombre</span><span class="in"><input id="label" type="text" maxlength="24" style="text-align:left;font-family:var(--font-sans)"></span></label>
+  </section>
+
+  <section class="station station-2"><div class="st"><b>2</b><span data-i18n="s2">Vanos y pilares</span><span class="aside lbl" data-i18n="s2h">entre ejes</span></div>
+    <div class="cb-head" aria-hidden="true"><span></span><span class="lbl r"><i class="sym">L</i> <span data-i18n="u_spanlen">m</span></span><span class="lbl r"><i class="sym">b</i> <span data-unit="len">cm</span></span><span class="lbl r"><i class="sym">h</i> <span data-unit="len">cm</span></span><span></span></div>
+    <div class="cb-rows" id="spans" role="group" data-i18n-aria="s2" aria-label="Vanos y pilares"></div>
+    <button class="link-btn" type="button" id="add-span" data-i18n="add_span">+ Agregá un vano</button>
+    <div class="cb-head cb-head--col" aria-hidden="true"><span></span><span class="lbl r"><i class="sym">a</i> <span data-unit="len">cm</span></span><span class="lbl r"><i class="sym">b</i> <span data-unit="len">cm</span></span><span class="lbl r"><span data-i18n="col_Hb">H↓</span> <span data-i18n="u_spanlen">m</span></span><span class="lbl r"><span data-i18n="col_Ha">H↑</span> <span data-i18n="u_spanlen">m</span></span><span class="lbl r" data-i18n="pin_short">art.</span></div>
+    <div class="cb-rows" id="columns" role="group" data-i18n-aria="columns" aria-label="Pilares"></div>
+    <p class="hint" data-i18n="columns_hint">a a lo largo de la viga, b la otra dimensión; H de piso a piso, abajo y arriba (0 si es azotea). La viga es rígida dentro del pilar y el pilar dentro del canto de la viga; el último tramo toma el empotramiento en cabeza.</p>
+    <div class="cb-ends">
+      <label class="field"><span class="lbl" data-i18n="base">Pie del pilar de abajo</span><span class="in sel"><select id="base" data-i18n-aria="base" aria-label="Pie del pilar de abajo"></select></span></label>
+      <label class="field"><span class="lbl" data-i18n="above">Pilar de arriba</span><span class="in sel"><select id="above" data-i18n-aria="above" aria-label="Pilar de arriba"></select></span></label>
+    </div>
+    <div class="cb-ends">
+      <label class="field"><span class="lbl" data-i18n="end_left">Extremo izq.</span><span class="in sel"><select id="end-left" data-i18n-aria="aria_end_left" aria-label="Extremo izquierdo"></select></span></label>
+      <label class="field"><span class="lbl" data-i18n="end_right">Extremo der.</span><span class="in sel"><select id="end-right" data-i18n-aria="aria_end_right" aria-label="Extremo derecho"></select></span></label>
+    </div>
+  </section>
+
+  <section class="station station-3"><div class="st"><b>3</b><span data-i18n="s3">Cargas</span><span class="aside lbl" data-i18n="s3h">por estado, sin mayorar</span></div>
+    <div class="cb-loads" id="loads" role="group" data-i18n-aria="s3" aria-label="Cargas"></div>
+    <button class="link-btn" type="button" id="add-load" data-i18n="add_load">+ Agregá una carga</button>
+    <p class="hint" style="border-top:1px solid var(--line-3);padding-top:8px" id="loads-hint" data-i18n="loads_hint">El peso propio de la viga ya está en D (PP en EN 1992). Las posiciones se miden desde el eje del pilar de la izquierda.</p>
+    <div class="cb-combos" role="group" data-i18n-aria="combos" aria-label="Combinaciones">
+      <div class="cb-combos-head"><span class="lbl" data-i18n="combos">Combinaciones</span><span class="aside lbl" data-i18n="combos_h">de la norma</span></div>
+      <ul id="combos"></ul>
+      <p class="hint" id="combos-hint"></p>
+    </div>
+  </section>
+
+  <div class="drawing cb-elev"><span class="lbl" data-i18n="elev">Viga · escala horizontal</span><div id="drawing"></div></div>
+
+  <section class="card verdict-card station-4" id="result" aria-live="polite">
+    <div id="loading">
+      <div style="padding:16px 16px 12px;border-bottom:1px solid var(--line-3)"><div style="display:flex;align-items:baseline;gap:10px"><span style="font-size:16px;font-weight:600" data-i18n="warmlong">Preparando el motor de cálculo</span></div><div class="progress" style="margin-top:10px"><i id="progress" style="width:8%"></i></div></div>
+      <ul class="steps" id="steps" style="margin:0;padding:8px 16px;border-bottom:1px solid var(--line-3)">
+        <li data-step="python" data-s="doing"><span class="dot"></span><span data-i18n="st1">Motor de Python</span><span class="status"></span></li>
+        <li data-step="packages" data-s="todo"><span class="dot"></span><span data-i18n="st2">Paquetes numéricos</span><span class="status"></span></li>
+        <li data-step="mento" data-s="todo"><span class="dot"></span><span id="step-mento">mento</span><span class="status"></span></li>
+        <li data-step="warmup" data-s="todo"><span class="dot"></span><span data-i18n="st4">Primer cálculo</span><span class="status"></span></li>
+      </ul>
+      <p class="hint" style="padding:12px 16px" data-i18n="warmhint">Solo la primera vez: queda guardado en tu navegador. Mientras tanto podés cargar tus datos; el resultado aparece acá apenas termine.</p>
+      <p class="hint" style="padding:6px 16px 12px;font-size:11px" data-i18n="privacy">Nada de lo que escribís sale de tu dispositivo.</p>
+    </div>
+    <div id="output" hidden>
+      <div class="strip" id="strip-info" hidden></div>
+      <div class="verdict" id="verdict" data-state="ok"><span class="mark"><svg width="18" height="18" aria-hidden="true"><use href="#i-check"/></svg></span><span class="word" id="verdict-word"></span><span class="dcr-max"><span class="cap" data-i18n="dcr_max">DCR máx.</span><span class="readout readout--xl" id="verdict-dcr"></span></span></div>
+      <div id="notices"></div>
+      <div class="cb-survey" id="survey">
+        <div class="t" data-i18n="survey_t">Si pudiéramos sumar una sola cosa, ¿cuál te serviría más?</div>
+        <label class="cb-check"><input type="radio" name="survey" value="dxf"><span data-i18n="survey_dxf">Plano DXF de la viga</span></label>
+        <label class="cb-check"><input type="radio" name="survey" value="report"><span data-i18n="survey_report">Memoria de cálculo</span></label>
+        <label class="cb-check"><input type="radio" name="survey" value="detailing"><span data-i18n="survey_detailing">Despiece completo: anclajes, solapes y planilla de doblado</span></label>
+        <label class="cb-check"><input type="radio" name="survey" value="none"><span data-i18n="survey_none">Nada más, así me alcanza</span></label>
+        <div class="actions"><button class="btn btn--sec" type="button" id="survey-send" data-i18n="survey_send">Enviar</button><button class="btn btn--sec" type="button" id="share"><svg width="14" height="14" aria-hidden="true"><use href="#i-link"/></svg><span data-i18n="share">Compartí el diseño</span></button></div>
+        <p class="hint" data-i18n-html="survey_hint">Se cuenta sin datos personales. Si querés que te avisemos, dejalo en las <a href="https://github.com/mento-calc/mento/discussions">Discussions</a>.</p>
+      </div>
+      <p class="hint" style="padding:6px 16px 12px;font-size:11px"><span id="warn-count" data-i18n="nowarn">Sin avisos</span> · mento <span id="version">1.7.0</span></p>
+    </div>
+  </section>
+</div>
+
+<div class="below cb-below">
+  <section class="card cb-checks" aria-labelledby="checks-title"><h2 class="cb-h" id="checks-title" data-i18n="checks">Chequeos por vano</h2><div id="ledger" class="cb-ledger"></div></section>
+  <section class="card cb-charts" aria-labelledby="charts-title"><h2 class="cb-h" id="charts-title" data-i18n="charts">Diagramas</h2>
+    <div class="cb-chips" id="chips" role="group" data-i18n-aria="charts" aria-label="Diagramas"></div>
+    <div id="charts"></div></section>
+  <details class="disc" id="disc-reactions" open><summary><span data-i18n="treac">Reacciones</span></summary>
+    <div class="df-wrap" id="reactions" tabindex="0" role="region" data-i18n-aria="treac" aria-label="Reacciones"></div></details>
+  <div class="disc-wrap"><details class="disc disc--code" id="disc-python"><summary><span data-i18n="tpy">Reproducilo en Python</span></summary>
+    <p class="pyinst"><span data-i18n="pyinst">Antes de correrlo, instalá mento:</span> <code translate="no">pip install mento</code></p>
+    <pre class="codeblock" id="python" tabindex="0" role="region" data-i18n-aria="tpy" aria-label="Reproducilo en Python"></pre></details><div class="disc-tools"><button class="btn btn--sec btn--small disc-copy--dark" type="button" id="copy-python"><svg width="12" height="12" aria-hidden="true"><use href="#i-copy"/></svg><span data-i18n="copy">Copiá</span></button></div></div>
+</div>
+<footer class="foot"><span data-i18n="footer">Herramienta de apoyo. La verificación final es responsabilidad del profesional.</span><span class="spacer"></span><span><a href="../#support" data-i18n="support_project">Apoyá el proyecto</a> · <a href="https://github.com/mento-calc/mento">GitHub</a> · <a href="https://mento-docs.readthedocs.io/en/latest/" data-i18n="docs">Docs</a> · <a href="https://github.com/mento-calc/mento/discussions" data-i18n="feedback">Contanos qué te pareció</a></span></footer>
+</main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"><svg width="16" height="16" style="color:#8ed0a5" aria-hidden="true"><use href="#i-check"/></svg><span id="toast-text"></span></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

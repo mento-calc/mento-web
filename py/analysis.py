@@ -104,17 +104,42 @@ class Beam:
 
     A free node at an end is the tip of an overhang; a free node inside a span joins two
     elements with no support between them (a section that changes mid-span).
+
+    ``springs``, one per node or none, is a rotational stiffness (moment per radian) that holds
+    the node's rotation: the columns a beam is cast with, ``Σ α·4EI/H`` of those above and below.
+    A pinned node with a spring is neither a pin nor a fixed end; its reaction carries the spring's
+    couple, and the moment jumps across it by that couple.
+
+    ``rigid``, one pair per element or none, is how far the element stays rigid from its start and
+    from its end: the beam inside a column's width, a joint of finite size. A rigid stretch turns
+    with its node and does not bend; the loads on it still reach the node through it.
     """
 
     lengths: tuple[float, ...]
     EI: tuple[float, ...]
     supports: tuple[str, ...]
+    springs: tuple[float, ...] | None = None
+    rigid: tuple[tuple[float, float], ...] | None = None
     nodes: np.ndarray = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         lengths = tuple(float(value) for value in self.lengths)
         stiffness = tuple(float(value) for value in self.EI)
         supports = tuple(self.supports)
+        springs = tuple(float(value) for value in self.springs) if self.springs is not None else None
+        if springs is not None and (
+            len(springs) != len(lengths) + 1 or any(not np.isfinite(value) or value < 0 for value in springs)
+        ):
+            raise AnalysisError("supports", "one rotational spring per node, none negative")
+        object.__setattr__(self, "springs", springs)
+        if self.rigid is not None:
+            rigid = tuple((float(a), float(b)) for a, b in self.rigid)
+            if len(rigid) != len(lengths) or any(
+                not (np.isfinite(a) and np.isfinite(b)) or a < 0 or b < 0 or a + b >= L
+                for (a, b), L in zip(rigid, lengths, strict=True)
+            ):
+                raise AnalysisError("rigid", "one rigid stretch per end of each element, shorter than it")
+            object.__setattr__(self, "rigid", rigid)
         if not lengths:
             raise AnalysisError("lengths", "a beam needs at least one element")
         if any(not np.isfinite(value) or value <= 0 for value in lengths):
@@ -124,7 +149,8 @@ class Beam:
         if len(supports) != len(lengths) + 1 or any(kind not in SUPPORTS for kind in supports):
             raise AnalysisError("supports", f"one support per node, each one of {SUPPORTS}")
         held = [index for index, kind in enumerate(supports) if kind != FREE]
-        if FIXED not in supports and len(held) < 2:
+        restrained = FIXED in supports or any(springs[j] > 0 for j in held) if springs else FIXED in supports
+        if not restrained and len(held) < 2:
             raise AnalysisError("supports", "a mechanism: the beam needs two supports, or a fixed end")
         object.__setattr__(self, "lengths", lengths)
         object.__setattr__(self, "EI", stiffness)
@@ -134,6 +160,10 @@ class Beam:
     @property
     def length(self) -> float:
         return float(self.nodes[-1])
+
+    def ends(self, element: int) -> tuple[float, float]:
+        """How far the element stays rigid from its start and from its end."""
+        return self.rigid[element] if self.rigid is not None else (0.0, 0.0)
 
     @property
     def held(self) -> tuple[int, ...]:
@@ -174,6 +204,49 @@ def _stiffness(length: float, EI: float) -> np.ndarray:
             [6.0 * L, 2.0 * L * L, -6.0 * L, 4.0 * L * L],
         ]
     )
+
+
+def _offsets(a: float, b: float) -> np.ndarray:
+    """From the nodes' (v₁, θ₁, v₂, θ₂) to those of the ends of the flexible stretch, ``a`` past
+    the first node and ``b`` short of the second: the rigid stretches turn with their nodes."""
+    return np.array([[1.0, a, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, -b], [0.0, 0.0, 0.0, 1.0]])
+
+
+def _element_stiffness(L: float, EI: float, a: float, b: float) -> np.ndarray:
+    """The stiffness of an element rigid for ``a`` from its start and ``b`` from its end."""
+    T = _offsets(a, b)
+    return T.T @ _stiffness(L - a - b, EI) @ T
+
+
+def _work(L: float, a: float, b: float, x0: float, x1: float) -> np.ndarray:
+    """∫ from ``x0`` to ``x1`` of what a unit downward load brings to each nodal load: the
+    deflected shape each nodal displacement makes, rigid stretches included."""
+    out = np.zeros(4)
+    flexible = L - a - b
+    lo, hi = max(x0, 0.0), min(x1, a)
+    if hi > lo:  # on the first rigid stretch: v = v₁ + θ₁·x
+        out += [hi - lo, (hi**2 - lo**2) / 2, 0.0, 0.0]
+    lo, hi = max(x0, a), min(x1, L - b)
+    if hi > lo:
+        out += (
+            _shape_integrals((hi - a) / flexible, flexible) - _shape_integrals((lo - a) / flexible, flexible)
+        ) @ _offsets(a, b)
+    lo, hi = max(x0, L - b), min(x1, L)
+    if hi > lo:  # on the last one: v = v₂ − θ₂·(L − x)
+        out += [0.0, 0.0, hi - lo, -((L - lo) ** 2 - (L - hi) ** 2) / 2]
+    return out
+
+
+def _point(L: float, a: float, b: float, x: float) -> tuple[np.ndarray, np.ndarray]:
+    """The deflected shape each nodal displacement makes at ``x``, and its slope."""
+    if x < a:
+        return np.array([1.0, x, 0.0, 0.0]), np.array([0.0, 1.0, 0.0, 0.0])
+    if x > L - b:
+        return np.array([0.0, 0.0, 1.0, -(L - x)]), np.array([0.0, 0.0, 0.0, 1.0])
+    flexible = L - a - b
+    values, slopes = _shapes((x - a) / flexible, flexible)
+    T = _offsets(a, b)
+    return values @ T, slopes @ T
 
 
 def _shapes(xi: float, L: float) -> tuple[np.ndarray, np.ndarray]:
@@ -359,9 +432,12 @@ def _check_loads(beam: Beam, loads: Mapping[str, Sequence[Load]]) -> None:
 
 
 def _breakpoints(beam: Beam, loads: Mapping[str, Sequence[Load]]) -> list[np.ndarray]:
-    """Each element's breakpoints, shared by every case: its two ends and every point where a
-    load of any case starts, stops or stands."""
-    found: list[list[float]] = [[0.0, L] for L in beam.lengths]
+    """Each element's breakpoints, shared by every case: its two ends, where its rigid stretches
+    end, and every point where a load of any case starts, stops or stands."""
+    found: list[list[float]] = [
+        [0.0, L] + [x for x in (beam.ends(e)[0], L - beam.ends(e)[1]) if 0.0 < x < L]
+        for e, L in enumerate(beam.lengths)
+    ]
     for items in loads.values():
         for load in items:
             L = beam.lengths[load.element]
@@ -398,23 +474,24 @@ def solve(beam: Beam, loads: Mapping[str, Sequence[Load]]) -> Solution:
     names = list(loads)
 
     K = np.zeros((dofs, dofs))
-    for e, (L, EI) in enumerate(zip(beam.lengths, beam.EI)):
-        K[2 * e : 2 * e + 4, 2 * e : 2 * e + 4] += _stiffness(L, EI)
+    stiffness = [_element_stiffness(L, EI, *beam.ends(e)) for e, (L, EI) in enumerate(zip(beam.lengths, beam.EI))]
+    for e, k in enumerate(stiffness):
+        K[2 * e : 2 * e + 4, 2 * e : 2 * e + 4] += k
 
     # each element's own equivalent nodal loads, one column per case
     equivalent = np.zeros((count, 4, len(names)))
     for c, case in enumerate(names):
         for load in loads[case]:
             L = beam.lengths[load.element]
+            a, b = beam.ends(load.element)
             if isinstance(load, Uniform):
                 end = L if load.end is None else load.end
-                share = _shape_integrals(min(end, L) / L, L) - _shape_integrals(max(load.start, 0.0) / L, L)
-                equivalent[load.element, :, c] += -load.q * share
+                equivalent[load.element, :, c] += -load.q * _work(L, a, b, max(load.start, 0.0), min(end, L))
             elif isinstance(load, Point):
-                values, _ = _shapes(min(max(load.at, 0.0), L) / L, L)
+                values, _ = _point(L, a, b, min(max(load.at, 0.0), L))
                 equivalent[load.element, :, c] += -load.P * values
             else:
-                _, slopes = _shapes(min(max(load.at, 0.0), L) / L, L)
+                _, slopes = _point(L, a, b, min(max(load.at, 0.0), L))
                 equivalent[load.element, :, c] += load.C * slopes
     f = np.zeros((dofs, len(names)))
     for e in range(count):
@@ -424,24 +501,36 @@ def solve(beam: Beam, loads: Mapping[str, Sequence[Load]]) -> Solution:
     for node, kind in enumerate(beam.supports):
         held += [2 * node] if kind == PIN else [2 * node, 2 * node + 1] if kind == FIXED else []
     free = np.setdiff1d(np.arange(dofs), held)
+    springs = np.zeros(count + 1) if beam.springs is None else np.asarray(beam.springs)
+    rotations = 2 * np.arange(count + 1) + 1
+    K[rotations, rotations] += springs  # a fixed end's spring is idle: its rotation is held
     u = np.zeros((dofs, len(names)))
     if free.size:
         u[free] = np.linalg.solve(K[np.ix_(free, free)], f[free])
     reactions = K @ u - f
     reactions[free] = 0.0
+    # the couple each spring puts on the beam, against the rotation of its node
+    reactions[rotations] += np.where(np.isin(rotations, free), 1.0, 0.0)[:, None] * (-springs[:, None] * u[rotations])
 
     breaks = _breakpoints(beam, loads)
     start = np.concatenate([beam.nodes[e] + points[:-1] for e, points in enumerate(breaks)])
     end = np.concatenate([beam.nodes[e] + points[1:] for e, points in enumerate(breaks)])
     element = np.concatenate([np.full(points.size - 1, e) for e, points in enumerate(breaks)])
-    layout = _Layout(beam=beam, start=start, end=end, element=element, EI=np.asarray(beam.EI)[element])
+    # a rigid stretch does not bend: its EI is infinite, so it turns and moves as a whole
+    middle = (start + end) / 2 - beam.nodes[element]
+    rigid = np.array([beam.ends(e) for e in element]).reshape(-1, 2)
+    lengths = np.asarray(beam.lengths)[element]
+    bends = (middle > rigid[:, 0]) & (middle < lengths - rigid[:, 1])
+    layout = _Layout(
+        beam=beam, start=start, end=end, element=element, EI=np.where(bends, np.asarray(beam.EI)[element], np.inf)
+    )
 
     results = {}
     for c, case in enumerate(names):
         states = []
         for e, points in enumerate(breaks):
             L, EI = beam.lengths[e], beam.EI[e]
-            ends = _stiffness(L, EI) @ u[2 * e : 2 * e + 4, c] - equivalent[e, :, c]
+            ends = stiffness[e] @ u[2 * e : 2 * e + 4, c] - equivalent[e, :, c]
             # what stands at each breakpoint, and the load on each piece
             forces, couples = np.zeros(points.size), np.zeros(points.size)
             intensity = np.zeros(points.size - 1)
@@ -458,13 +547,16 @@ def solve(beam: Beam, loads: Mapping[str, Sequence[Load]]) -> Solution:
                     intensity[a:b] += -load.q
             V, M = ends[0], -ends[1]
             theta, v = u[2 * e + 1, c], u[2 * e, c]
+            a, b = beam.ends(e)
             for k in range(points.size - 1):
                 V += forces[k]
                 M -= couples[k]
                 p = intensity[k]
                 states.append((p, V, M, theta, v))
                 h = points[k + 1] - points[k]
-                V, M, theta, v = _evaluate(np.array([p, V, M, theta, v]), h, EI)
+                middle = (points[k] + points[k + 1]) / 2
+                stiff = EI if a < middle < L - b else np.inf
+                V, M, theta, v = _evaluate(np.array([p, V, M, theta, v]), h, stiff)
         results[case] = Result(
             layout=layout,
             states=np.array(states),
@@ -578,20 +670,26 @@ def arrangements(
 
 
 def support_moments(result: Result) -> np.ndarray:
-    """The moment over each node: from the element before it, from the one after at the
-    start of the beam."""
-    beam = result.layout.beam
-    nodes = beam.nodes
-    after = np.zeros(nodes.size, bool)
-    after[0] = True
-    return result.moment(nodes, after)
+    """The moment over each node, the more hogging of its two sides: a column's spring (or a
+    couple) makes it jump there. The first node has only the side after it, the last the one
+    before."""
+    nodes = result.layout.beam.nodes
+    before = result.moment(nodes, np.zeros(nodes.size, bool))
+    past = result.moment(nodes, np.ones(nodes.size, bool))
+    before[0], past[-1] = past[0], before[-1]
+    return np.minimum(before, past)
 
 
-def redistribute(result: Result, ratio: float | Mapping[int, float]) -> Result:
+def redistribute(result: Result, ratio: float | Mapping[int, float], faces: Sequence[float] | None = None) -> Result:
     """``result`` with the hogging moment over each redistributable support reduced by
     ``ratio`` (one for all, or by node), and the moments along the spans raised to keep the
-    equilibrium: a correction linear between supports, which moves the shear and the reactions
-    with it. Only hogging moments are reduced; a support that sags is left as it is."""
+    equilibrium: a correction linear along each span, which moves the shear and the reactions
+    with it. Only hogging moments are reduced; a support that sags is left as it is.
+
+    Where the support holds a couple (a fixed end, a column's spring), each side is reduced on its
+    own, at the support's face: ``faces`` is how far each node's face is from it (none, at the
+    node), as CYPECAD reduces the moment at each face of a column. The column then takes what the
+    two sides no longer share. A plain pin cannot: both its sides are reduced alike, at the node."""
     beam = result.layout.beam
     ratios = {j: ratio for j in beam.redistributable} if not isinstance(ratio, Mapping) else dict(ratio)
     for node, value in ratios.items():
@@ -599,34 +697,45 @@ def redistribute(result: Result, ratio: float | Mapping[int, float]) -> Result:
             raise AnalysisError("ratio", f"node {node} is not a support whose moment can be redistributed")
         if not 0.0 <= value < 1.0:
             raise AnalysisError("ratio", "a redistribution ratio is between 0 and 1")
+    if faces is not None and (len(faces) != beam.nodes.size or any(not np.isfinite(f) or f < 0 for f in faces)):
+        raise AnalysisError("ratio", "one face distance per node, none negative")
     elastic = support_moments(result)
-    change = np.zeros(beam.nodes.size)
-    for node, value in ratios.items():
-        change[node] = -value * min(elastic[node], 0.0)
-    # inside a span (a free node between two supports) the correction stays a straight line
-    held = beam.held
-    for a, b in itertools.pairwise(held):
-        for node in range(a + 1, b):
-            share = (beam.nodes[node] - beam.nodes[a]) / (beam.nodes[b] - beam.nodes[a])
-            change[node] = change[a] + share * (change[b] - change[a])
+
+    def couples(node: int) -> bool:
+        return beam.supports[node] == FIXED or bool(beam.springs and beam.springs[node] > 0)
+
+    def anchor(node: int, after: bool) -> tuple[float, float]:
+        """Where the span's correction is pinned down next to ``node``, and its value there."""
+        value = ratios.get(node, 0.0)
+        if not couples(node) or faces is None:
+            return float(beam.nodes[node]), -value * min(elastic[node], 0.0)
+        x = float(beam.nodes[node] + (faces[node] if after else -faces[node]))
+        return x, -value * min(float(result.moment(x, after=after)), 0.0)
+
+    # each element's correction: its value at the element's first node and its slope
+    count = len(beam.lengths)
+    first, slope = np.zeros(count), np.zeros(count)
+    for a, b in itertools.pairwise(beam.held):
+        (xl, dl), (xr, dr) = anchor(a, True), anchor(b, False)
+        rise = (dr - dl) / (xr - xl)
+        for e in range(a, b):
+            first[e], slope[e] = dl + rise * (beam.nodes[e] - xl), rise
 
     layout = result.layout
     e = layout.element
-    lengths = np.asarray(beam.lengths)
-    slope = (change[e + 1] - change[e]) / lengths[e]
     states = result.states.copy()
-    states[:, 1] += slope
-    states[:, 2] += change[e] + slope * (layout.start - beam.nodes[e])
+    states[:, 1] += slope[e]
+    states[:, 2] += first[e] + slope[e] * (layout.start - beam.nodes[e])
     states[:, 3:] = np.nan
 
-    per_element = (change[1:] - change[:-1]) / lengths  # ΔV of each element
-    before = np.concatenate([[0.0], per_element])
-    past = np.concatenate([per_element, [0.0]])
-    moment_before = np.concatenate([[0.0], change[1:]])
-    moment_past = np.concatenate([change[:-1], [0.0]])
+    last = first + slope * np.asarray(beam.lengths)  # the correction at each element's end
+    before = np.concatenate([[0.0], slope])
+    past = np.concatenate([slope, [0.0]])
+    moment_before = np.concatenate([[0.0], last])
+    moment_past = np.concatenate([first, [0.0]])
     reactions = result.reactions.copy()
-    for node in held:
+    for node in beam.held:
         reactions[node, 0] += past[node] - before[node]
-        if beam.supports[node] == FIXED:
+        if couples(node):
             reactions[node, 1] += moment_before[node] - moment_past[node]
     return Result(layout, states, reactions, np.full_like(result.displacements, np.nan), elastic=False)

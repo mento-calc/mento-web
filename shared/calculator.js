@@ -10,7 +10,7 @@ export const dcrState = (dcr) => (dcr === null || dcr === undefined ? "none" : d
 export const two = (dcr) => (dcr === null || dcr === undefined ? "—" : dcr.toFixed(2));
 // What visitors do, for the site's analytics (the Google tag in each page's head): the action and
 // the calculator's settings travel, never the numbers typed. With the tag blocked it does nothing.
-function track(event, params) {
+export function track(event, params) {
   try { window.gtag?.("event", event, params); } catch { /* analytics never breaks the page */ }
 }
 // Dimension lines, as a drawing shows them: extension lines off the section's edges, the line

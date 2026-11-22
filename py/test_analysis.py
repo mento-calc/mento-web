@@ -185,6 +185,111 @@ class TestOneLoadAtATime:
         np.testing.assert_allclose(halves["D"].deflection(x), whole.deflection(x), rtol=1e-12, atol=1e-15)
 
 
+class TestColumnSprings:
+    """A column cast with the beam holds its rotation: a spring of stiffness k at the node."""
+
+    def test_one_span_held_by_a_spring_at_one_end(self) -> None:
+        """Pinned at the far end, the near end takes −qL²/8 · k/(k + 3EI/L): nothing with no
+        spring, the fixed end's −qL²/8 with a rigid one. The spring's couple is its reaction."""
+        for k in (0.0, EI / L, 3 * EI / L, 50 * EI / L):
+            beam = Beam((L,), (EI,), ("pin", "pin"), springs=(k, 0.0))
+            result = solve(beam, {"D": [Uniform(0, q)]})["D"]
+            expected = -q * L**2 / 8 * k / (k + 3 * EI / L)
+            assert result.moment(0.0, after=True) == pytest.approx(expected, abs=1e-9)
+            assert result.reactions[0, 1] == pytest.approx(-expected, abs=1e-9)
+            assert result.reactions[:, 0].sum() == pytest.approx(q * L)
+
+    def test_a_stiff_spring_is_a_fixed_end(self) -> None:
+        fixed = solve(Beam((L,), (EI,), ("fixed", "pin")), {"D": [Uniform(0, q)]})["D"]
+        sprung = solve(Beam((L,), (EI,), ("pin", "pin"), springs=(1e6 * EI, 0.0)), {"D": [Uniform(0, q)]})["D"]
+        x = np.linspace(0, L, 11)
+        np.testing.assert_allclose(sprung.moment(x), fixed.moment(x), rtol=1e-5, atol=1e-5)
+
+    def test_the_moment_jumps_by_the_column_s_couple(self) -> None:
+        """Over an inner column the beam's moment differs on each side by what the column
+        takes; the support's moment reads the more hogging side."""
+        beam = Beam((L, L), (EI, EI), ("pin", "pin", "pin"), springs=(0.0, 5e3, 0.0))
+        result = solve(beam, {"D": [Uniform(0, q), Uniform(1, 2 * q)]})["D"]
+        jump = result.moment(L, after=True) - result.moment(L)
+        assert jump == pytest.approx(-result.reactions[1, 1])
+        assert abs(jump) > 1.0
+        assert support_moments(result)[1] == pytest.approx(min(result.moment(L), result.moment(L, after=True)))
+
+    def test_one_support_and_a_spring_stands(self) -> None:
+        """A cantilever off a column: one support, held against turning by the column alone."""
+        beam = Beam((L,), (EI,), ("pin", "free"), springs=(1e5, 0.0))
+        result = solve(beam, {"P": [Point(0, P, L)]})["P"]
+        assert result.moment(0.0, after=True) == pytest.approx(-P * L)
+
+    @pytest.mark.parametrize("springs", [(1.0,), (-1.0, 0.0), (float("nan"), 0.0)])
+    def test_what_springs_refuse(self, springs: tuple[float, ...]) -> None:
+        with pytest.raises(AnalysisError, match="spring"):
+            Beam((L,), (EI,), ("pin", "pin"), springs=springs)
+
+
+class TestRigidJoints:
+    """The beam inside a column's width does not bend: a rigid stretch at the end of an element,
+    turning with its node."""
+
+    def test_fixed_ends_hold_the_flexible_stretch_as_their_own(self) -> None:
+        """Rigid for a and b from its fixed ends, the beam is a fixed-fixed one of the stretch
+        between them: −qℓ²/12 at its ends, qℓ²/24 and qℓ⁴/384EI at its middle."""
+        a, b = 0.3, 0.5
+        flexible = L - a - b
+        beam = Beam((L,), (EI,), ("fixed", "fixed"), rigid=((a, b),))
+        result = solve(beam, {"D": [Uniform(0, q, a, L - b)]})["D"]
+        assert result.moment(a) == pytest.approx(-q * flexible**2 / 12)
+        assert result.moment(L - b) == pytest.approx(-q * flexible**2 / 12)
+        assert result.moment(a + flexible / 2) == pytest.approx(q * flexible**2 / 24)
+        assert result.deflection(a + flexible / 2) == pytest.approx(-q * flexible**4 / (384 * EI))
+        assert result.deflection(a / 2) == pytest.approx(0.0, abs=1e-12)
+
+    def test_the_same_as_very_stiff_elements(self) -> None:
+        """Two spans on springs, rigid inside the columns, loaded also there: as the same beam cut
+        at the faces with elements a million times stiffer inside the columns."""
+        halves = (0.15, 0.25, 0.2)
+        springs = (2e4, 6e4, 1e4)
+        loads = {"D": [Uniform(0, q), Uniform(1, 1.5 * q), Point(0, P, 0.1), Point(1, P, 2.0), Couple(1, 20.0, 0.1)]}
+        beam = Beam(
+            (L, 4.0),
+            (EI, EI),
+            ("pin", "pin", "pin"),
+            springs=springs,
+            rigid=((halves[0], halves[1]), (halves[1], halves[2])),
+        )
+        result = solve(beam, loads)["D"]
+
+        cut = (halves[0], L - halves[0] - halves[1], halves[1], halves[1], 4.0 - halves[1] - halves[2], halves[2])
+        stiff = (1e6 * EI, EI, 1e6 * EI, 1e6 * EI, EI, 1e6 * EI)
+        supports = ("pin", "free", "free", "pin", "free", "free", "pin")
+        split = Beam(cut, stiff, supports, springs=(springs[0], 0, 0, springs[1], 0, 0, springs[2]))
+
+        def place(element: int, at: float) -> tuple[int, float]:
+            """The piece of the cut beam a point of the beam falls on, and how far into it."""
+            x = beam.nodes[element] + at
+            piece = min(int(np.searchsorted(split.nodes, x, side="right") - 1), len(cut) - 1)
+            return piece, x - split.nodes[piece]
+
+        moved: list[analysis.Load] = [Uniform(k, q if k < 3 else 1.5 * q) for k in range(6)]
+        for element, at in ((0, 0.1), (1, 2.0)):
+            piece, there = place(element, at)
+            moved.append(Point(piece, P, there))
+        piece, there = place(1, 0.1)
+        moved.append(Couple(piece, 20.0, there))
+        reference = solve(split, {"D": moved})["D"]
+        x = np.linspace(0.0, L + 4.0, 41)
+        np.testing.assert_allclose(result.moment(x), reference.moment(x), rtol=1e-5, atol=1e-4)
+        np.testing.assert_allclose(result.deflection(x), reference.deflection(x), rtol=1e-5, atol=1e-9)
+        np.testing.assert_allclose(result.reactions[:, 0], reference.reactions[[0, 3, 6], 0], rtol=1e-6)
+        np.testing.assert_allclose(result.reactions[:, 1], reference.reactions[[0, 3, 6], 1], rtol=1e-5, atol=1e-6)
+
+    @pytest.mark.parametrize("rigid", [((0.1, 0.1), (0.1, 0.1)), ((-0.1, 0.0),), ((3.0, 2.0),), ((float("nan"), 0.0),)])
+    def test_what_rigid_stretches_refuse(self, rigid: tuple) -> None:
+        with pytest.raises(AnalysisError, match="rigid") as raised:
+            Beam((L,), (EI,), ("pin", "pin"), rigid=rigid)
+        assert raised.value.field == "rigid"
+
+
 class TestOverhangs:
     a, span = 1.5, 6.0
 
@@ -233,6 +338,36 @@ class TestRedistribution:
             peak = reaction / q
             assert result.shear(peak) == pytest.approx(0.0, abs=1e-9)
             assert result.moment(peak) == pytest.approx(reaction**2 / (2 * q))
+
+    def test_each_face_of_a_column_on_its_own(self) -> None:
+        """Over columns, each face's hogging moment drops by r on its own, the span between two
+        faces raised by a straight line; the column takes what the two sides no longer share.
+        A plain pin, given a face, still drops alike on both sides, at its axis."""
+        halves = (0.15, 0.25, 0.2)
+        beam = Beam(
+            (L, 4.0), (EI, EI), ("pin", "pin", "pin"), springs=(2e4, 6e4, 1e4), rigid=((0.15, 0.25), (0.25, 0.2))
+        )
+        elastic = solve(beam, {"D": [Uniform(0, q), Uniform(1, 2 * q)]})["D"]
+        result = redistribute(elastic, 0.15, faces=halves)
+        for x, after in ((0.15, True), (L - 0.25, False), (L + 0.25, True), (L + 4.0 - 0.2, False)):
+            assert result.moment(x, after) == pytest.approx(0.85 * elastic.moment(x, after))
+        middle = L + 2.0  # the correction is a straight line between the faces
+        line = (
+            0.15 * -elastic.moment(L + 0.25, True)
+            + (0.15 * -elastic.moment(L + 3.8, False) - 0.15 * -elastic.moment(L + 0.25, True))
+            * (middle - L - 0.25)
+            / 3.55
+        )
+        assert result.moment(middle) == pytest.approx(elastic.moment(middle) + line)
+        assert result.reactions[:, 0].sum() == pytest.approx(q * L + 2 * q * 4.0)
+        reacted = (result.reactions[:, 0] * beam.nodes).sum() + result.reactions[:, 1].sum()
+        assert reacted == pytest.approx(q * L * L / 2 + 2 * q * 4.0 * (L + 2.0))
+
+        pinned = _equal_spans(2)
+        plain = solve(pinned, {"D": _uniform(pinned)})["D"]
+        with_faces = redistribute(plain, 0.2, faces=(0.2, 0.2, 0.2))
+        assert with_faces.moment(L) == pytest.approx(redistribute(plain, 0.2).moment(L))
+        assert with_faces.moment(L, after=True) == pytest.approx(with_faces.moment(L))
 
     def test_nothing_to_redistribute_is_the_elastic_result(self) -> None:
         beam = _equal_spans(3, ("fixed", "pin"))
@@ -334,8 +469,8 @@ class TestArrangements:
 
 
 def _random_case(seed: int) -> tuple[Beam, list[analysis.Load]]:
-    """A beam of 1 to 6 spans, any end, maybe an overhang, a stiffness per element and a mix
-    of full, partial, point and couple loads."""
+    """A beam of 1 to 6 spans, any end, maybe an overhang, a stiffness per element, maybe rigid
+    stretches at the ends of its elements, and a mix of full, partial, point and couple loads."""
     rng = np.random.default_rng(seed)
     count = int(rng.integers(1, 7))
     lengths = list(rng.uniform(2.0, 9.0, count))
@@ -350,7 +485,20 @@ def _random_case(seed: int) -> tuple[Beam, list[analysis.Load]]:
         supports.append("free")
     if count == 1 and "fixed" not in supports and supports.count("pin") < 2:
         supports = ["pin" if kind == "free" else kind for kind in supports]
-    beam = Beam(tuple(lengths), tuple(rng.uniform(0.5e4, 3e4, len(lengths))), tuple(supports))
+    stiffness = tuple(rng.uniform(0.5e4, 3e4, len(lengths)))
+    # half the beams sit on columns: a rotational spring at each pinned node, from 0 to stiff
+    springs = None
+    if seed % 2 == 0:
+        draw = np.random.default_rng(seed + 1000)
+        springs = tuple(float(draw.uniform(0, 4e4)) if kind == "pin" else 0.0 for kind in supports)
+    # a third of them rigid inside their columns, a stretch at each end of each element
+    rigid = None
+    if seed % 3 == 0:
+        draw = np.random.default_rng(seed + 2000)
+        rigid = tuple(
+            (float(draw.uniform(0, 0.2 * length)), float(draw.uniform(0, 0.2 * length))) for length in lengths
+        )
+    beam = Beam(tuple(lengths), stiffness, tuple(supports), springs=springs, rigid=rigid)
     loads: list[analysis.Load] = []
     for e, length in enumerate(beam.lengths):
         loads.append(Uniform(e, float(rng.uniform(1, 20))))
@@ -428,7 +576,9 @@ def test_redistributed_arrangements_stay_in_equilibrium(seed: int) -> None:
     beam, loads = _random_case(seed)
     if not beam.redistributable:
         pytest.skip("nothing to redistribute")
-    result = redistribute(solve(beam, {"all": loads})["all"], 0.2)
+    # at the faces of columns as wide as a tenth of the shortest element, or at the nodes
+    faces = (min(beam.lengths) / 20,) * beam.nodes.size if seed % 2 == 0 else None
+    result = redistribute(solve(beam, {"all": loads})["all"], 0.2, faces=faces)
     force, moment = _load_resultants(loads, beam)
     assert result.reactions[:, 0].sum() == pytest.approx(force, rel=1e-9, abs=1e-8)
     reacted = (result.reactions[:, 0] * beam.nodes).sum() + result.reactions[:, 1].sum()
