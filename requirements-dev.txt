@@ -3,3 +3,6 @@ mento==1.6.3
 pytest
 ruff==0.16.8  # pinned: CI and local must lint with the same rules
 openpyxl
+# The continuous beam solver is compared with PyNite (py/test_analysis_pynite.py); it brings scipy,
+# and the site never loads it.
+PyNiteFEA==3.2.1
