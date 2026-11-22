@@ -200,6 +200,23 @@ def test_en_reads_the_neutral_axis_and_the_ratio_of_spans() -> None:
     assert all(not check["ok"] and check["reason"] == "spans" and check["max"] == 0 for check in checks)
 
 
+@needs_ductility
+def test_a_section_that_cannot_keep_its_delta_says_so() -> None:
+    """A shallow, wide EN beam asked for 30 % (δ = 0.7): the fewest bars that fit the stirrups
+    already put x_u/d past (δ − k₁)/k₂. mento's design warns on that face, the page shows it, and
+    the support fails with the most the section allows, 1 − (0.44 + 1.25·x_u/d)."""
+    data = _two_spans(code="EN 1992-2004", fc=20, fy=500, self_weight=True, redistribution=30)
+    data["spans"] = [{"L": 3.0, "width": 30, "height": 20}] * 2
+    data["loads"] = [{"case": "D", "type": "uniform", "element": e, "value": 4.0} for e in (0, 1)]
+    result = _run(data)
+    design = result["designs"][0]
+    assert "x_u_above_redistribution_limit" in [notice["code"] for notice in design["notices"]]
+    check = result["supports"][1]["redistribution"]
+    assert check["requested"] == 30 and not check["ok"]
+    assert check["max"] == pytest.approx(100 * (1 - (0.44 + 1.25 * design["x_u_d"])), abs=0.06)
+    assert not result["complies"]
+
+
 def test_an_overhang_is_designed_for_its_support_and_never_redistributed() -> None:
     data = copy.deepcopy(continuous.EXAMPLE) | {"redistribution": 0}
     data["ends"]["right"] = {"type": "overhang", "L": 1.5, "width": 20, "height": 55}

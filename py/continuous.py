@@ -104,6 +104,9 @@ ACI_EPSILON_MIN, ACI_MAX_PERCENT = 0.0075, 20.0
 #: EN 1992-1-1 §5.5(4): δ ≥ k₁ + k₂·x_u/d and δ ≥ k₅ = 0.7 (Class B and C reinforcement), with
 #: adjacent spans between 0.5 and 2 times each other.
 EN_DELTA_MIN, EN_SPAN_RATIO = 0.70, 2.0
+#: What only mento's design says, and its check of the same bars does not: py/beam.py's shortfall,
+#: and a face that cannot keep the δ of EN 1992-1-1 §5.5(4) it was designed for (mento 1.7.0).
+DESIGN_ONLY_CODES = (*beam._SHORTFALL_CODES, "x_u_above_redistribution_limit")
 #: Below this, a moment is zero: 0.01 kN·m on a beam.
 _NOTHING = 1e-6
 
@@ -342,6 +345,16 @@ def _design(payload: str) -> dict[str, Any]:
         checked, node = beam._checked(data, forces, layouts)
     flexure, shear = checked.flexure_design, checked.shear_design
     complies = bool(flexure.complies) and shear.DCR <= 1
+    notices = common.warning_notices(node, list(captured))
+    # Only a design can say that no layout that fits keeps the face within the δ it was designed
+    # for (EN 1992-1-1 §5.5(4)): mento raises it on the beam it designed, never on one checked
+    # with the same bars. The redistribution check of the support then fails on its own.
+    known = {notice["code"] for notice in notices}
+    notices += [
+        notice
+        for notice in common.warning_notices(designed, [])
+        if notice["code"] in DESIGN_ONLY_CODES and notice["code"] not in known
+    ]
     return {
         "rebar": {group: beam._layout_bars(layout, units) for group, layout in layouts.items()},
         "rows": {group: beam._layout_rows(layout, units) for group, layout in layouts.items()},
@@ -353,7 +366,7 @@ def _design(payload: str) -> dict[str, Any]:
         # mento that does not report it yet (before 1.7.0)
         "epsilon_t": getattr(flexure.top, "epsilon_t", None),
         "x_u_d": getattr(flexure.top, "x_u_d", None),
-        "notices": common.warning_notices(node, list(captured)),
+        "notices": notices,
         "section": beam._section(checked, layouts, units),
     }
 
