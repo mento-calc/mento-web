@@ -206,7 +206,10 @@ def materials(data: dict[str, Any]) -> tuple[Any, SteelBar]:
         raise InputError("code", "units")
     f_c = number(data, "fc")
     f_y = number(data, "fy")
-    concrete = CONCRETES[code](name=f"f'c {f_c:g}", f_c=f_c * ureg(units.f_c))
+    # EN 1992-1-1 §5.5(4): the redistribution a continuous beam is designed for bounds its
+    # neutral axis. Only that calculator sends it; the rest keep mento's default.
+    extra = {"delta": float(data["delta"])} if code == "EN 1992-2004" and data.get("delta") is not None else {}
+    concrete = CONCRETES[code](name=f"f'c {f_c:g}", f_c=f_c * ureg(units.f_c), **extra)
     return concrete, SteelBar(name=f"fy {f_y:g}", f_y=f_y * ureg(units.f_y))
 
 
